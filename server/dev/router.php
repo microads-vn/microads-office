@@ -12,6 +12,7 @@ if ($__uri === '/office') { header('Location: /office/', true, 301); return true
 if (str_starts_with($__uri, '/office/inc/')) { http_response_code(404); echo 'Not found'; return true; }
 if ($__uri === '/office/api/manifest.json') $__script = 'api.php';
 elseif ($__uri === '/office/privacy') $__script = 'privacy.php';
+elseif ($__uri === '/office/code-signing') $__script = 'code-signing.php';
 elseif ($__uri === '/office/install.ps1') $__script = 'install.php';
 elseif (preg_match('#^/office/download/([^/]+)$#', $__uri, $__m)) { $__script = 'download.php'; $_GET['f'] = rawurldecode($__m[1]); }
 elseif ($__uri === '/office/') $__script = 'index.php';

@@ -427,7 +427,10 @@ public static class UiTests
     private static void Click(ExcelForm f, string name)
     {
         var b = (RibbonButton)f.CommandControls[name];
-        b.PerformClick();
+        if (b.Visible) b.PerformClick();
+        // On small screens (e.g. 1024×768 CI runners) the ribbon collapses groups into a drop-down: the button is then
+        // hidden until the group is opened. Click it as the user would inside the opened group.
+        else typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(b, [EventArgs.Empty]);
         Pump();
     }
 

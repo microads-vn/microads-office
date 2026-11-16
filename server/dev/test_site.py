@@ -81,6 +81,13 @@ try:
     check('Vẫn chạy' in page and 'Tải tệp đáng ngờ xuống' in page and 'ít được tải xuống' in page and 'không phải phát hiện virus' in page,
           'safe-installation steps use the exact Chrome 157 wording (⋮ → Tải tệp đáng ngờ xuống) and Windows (Vẫn chạy)')
     check('google-site-verification' not in page, 'no Google verification tag until one is set')
+    check('href="code-signing" id="lnk-code-signing">Code signing policy</a>' in page and 'github.com/microads-vn/microads-office' in page, 'home/download page links the Code signing policy and the source code')
+    st, _, b = get('/code-signing'); cs = b.decode('utf-8')
+    check(st == 200 and 'Free code signing provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>.' in cs and not php_errors(cs),
+          'code signing policy page carries the exact SignPath Foundation text')
+    check('Approvers' in cs or 'phê duyệt' in cs, 'code signing policy lists team roles')
+    st, _, b = get('/privacy'); pv = b.decode('utf-8')
+    check(st == 200 and 'Tắt kết nối tự động' in pv and '--no-auto-update' in pv, 'privacy policy explains how to switch automatic connections off')
     check(f'irm {BASE}/install.ps1 | iex' in page and 'data-copy="cmd-ps"' in page, 'PowerShell command with Copy button')
     check('MicroadsOffice_Setup.exe --silent' in page, 'silent install command for IT')
     check('cmd-winget' not in page, 'winget command hidden while no package ID is set')
