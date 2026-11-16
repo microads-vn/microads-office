@@ -1,0 +1,13 @@
+# Build machine area: SDK, caches, test output, SECRETS (release signing keys, server passwords) — never published
+.build/
+# Built binaries are published as GitHub Releases / on microads.vn, not committed
+release/
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.log
+*.tmp
+__pycache__/

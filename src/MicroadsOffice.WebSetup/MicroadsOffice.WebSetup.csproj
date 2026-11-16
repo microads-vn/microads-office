@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Microads Office web installer ("MicroadsOffice_Setup.exe", ~100 KB).
+
+    WHY IT EXISTS: browsers (Chrome Safe Browsing) and Windows SmartScreen judge an unsigned .exe by its SHA-256.
+    Every new release of the full setup has a new hash and starts again from zero reputation. This small
+    installer NEVER changes: it always downloads the latest release from microads.vn, verifies the Microads
+    ECDSA release signature and starts it. Its single hash keeps accumulating reputation release after release.
+
+    RULE: the published binary is frozen in release\web-setup\ (see build.ps1 -WebSetup). Do not rebuild and
+    re-upload it for cosmetic reasons — a new binary means a new hash and the reputation starts from zero again.
+    Targets .NET Framework 4.6.2, which every Windows 10 / 11 already contains (nothing to install first).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net462</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>MicroadsOffice_Setup</AssemblyName>
+    <RootNamespace>MicroadsOffice.WebSetup</RootNamespace>
+    <ApplicationIcon>office.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>Microads Office</Product>
+    <AssemblyTitle>Microads Office Setup</AssemblyTitle>
+    <Company>Công ty TNHH Công nghệ Microads (microads.vn)</Company>
+    <Description>Trình cài đặt Microads Office (Word, Excel, PDF) — tải bản mới nhất từ microads.vn và kiểm tra chữ ký số của Microads. Luôn luôn miễn phí.</Description>
+    <Copyright>© Microads — microads.vn</Copyright>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)=C:\src\WebSetup</PathMap>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Runtime.Serialization" />
+    <!-- Suite icon (Microads mark + Word / Excel / PDF dots), same artwork as the installed "Microads Office" shortcut. -->
+    <EmbeddedResource Include="office.ico" LogicalName="office.ico" />
+  </ItemGroup>
+</Project>

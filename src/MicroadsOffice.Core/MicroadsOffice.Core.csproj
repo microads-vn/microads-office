@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>MicroadsOffice.Core</RootNamespace>
+    <NoWarn>CA1416;SYSLIB0057</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="159.0.8152" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,128 @@
+# Builds and tests Microads Office on every push / pull request.
+# On a version tag (v2.0.2, ...) the binaries are also submitted to SignPath for Authenticode signing (manual approval in SignPath)
+# and attached, signed, to a draft GitHub release. Signing runs only after the repository variables SIGNPATH_ORGANIZATION_ID,
+# SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG and the secret SIGNPATH_API_TOKEN are configured (see docs/SIGNPATH.md).
+name: Build & release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      version: ${{ steps.version.outputs.version }}
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$p = Get-Content src\MicroadsOffice\MicroadsOffice.csproj
+          $v = $p.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") { throw "Tag $env:GITHUB_REF_NAME does not match <Version>$v</Version>" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build
+        run: dotnet build MicroadsOffice.sln -c Release
+
+      - name: Tests — PDF core
+        shell: pwsh
+        run: |
+          & tests\MicroadsOffice.Tests\bin\Release\net10.0-windows\MicroadsOffice.Tests.exe core "$env:RUNNER_TEMP\pdf-test"
+          if ($LASTEXITCODE -ne 0) { throw 'PDF core tests failed' }
+
+      - name: Tests — Word
+        shell: pwsh
+        run: |
+          $p = Start-Process tests\MicroadsOffice.Word.Tests\bin\Release\net10.0-windows\MicroadsOffice.Word.Tests.exe -ArgumentList "all `"$env:RUNNER_TEMP\word-test`" vi" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw 'Word tests failed' }
+
+      - name: Tests — Excel
+        shell: pwsh
+        run: |
+          $p = Start-Process tests\MicroadsOffice.Excel.Tests\bin\Release\net10.0-windows\MicroadsOffice.Excel.Tests.exe -ArgumentList "all `"$env:RUNNER_TEMP\excel-test`"" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw 'Excel tests failed' }
+
+      - name: Package (one self-contained executable + web installer)
+        shell: pwsh
+        run: |
+          dotnet publish src\MicroadsOffice -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=false -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o publish
+          if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item publish\MicroadsOffice.exe out\MicroadsOffice.exe
+          Copy-Item src\MicroadsOffice.WebSetup\bin\Release\net462\MicroadsOffice_Setup.exe out\MicroadsOffice_Setup.exe
+          Get-ChildItem out | ForEach-Object { "{0}  {1:N0} bytes  {2}" -f $_.Name, $_.Length, (Get-FileHash $_.FullName).Hash }
+
+      - name: Upload unsigned binaries
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: microads-office-${{ steps.version.outputs.version }}-unsigned
+          path: out/*
+          if-no-files-found: error
+
+  sign:
+    # Version tags only, and only once SignPath has been set up for this repository.
+    if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Submit to SignPath (manual approval by a Microads approver)
+        uses: SignPath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: '86400'
+          output-artifact-directory: signed
+
+      - name: Check signatures
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem signed\*.exe) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            "{0}: {1} — {2}" -f $f.Name, $s.Status, $s.SignerCertificate.Subject
+            if ($s.Status -ne 'Valid') { throw "$($f.Name) is not validly signed" }
+          }
+
+      - name: Upload signed binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: microads-office-${{ needs.build.outputs.version }}-signed
+          path: signed/*
+
+      - name: Draft GitHub release with the signed binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        shell: pwsh
+        run: |
+          Copy-Item signed\MicroadsOffice.exe "signed\MicroadsOffice_Setup_$env:VERSION.exe"
+          gh release create $env:GITHUB_REF_NAME "signed\MicroadsOffice_Setup_$env:VERSION.exe" signed\MicroadsOffice_Setup.exe `
+            --repo $env:GITHUB_REPOSITORY --draft --title "Microads Office $env:VERSION" `
+            --notes "Signed build of Microads Office $env:VERSION. Download page: https://microads.vn/office/"

@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+PackageIdentifier: Microads.Office
+PackageVersion: 2.0.1
+Platform:
+- Windows.Desktop
+MinimumOSVersion: 10.0.17763.0
+InstallerType: exe
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+InstallerSwitches:
+  Silent: --silent
+  SilentWithProgress: --silent
+  InstallLocation: --dir "<INSTALLPATH>"
+  Custom: --install
+UpgradeBehavior: install
+ProductCode: MicroadsOffice
+FileExtensions:
+- docx
+- docm
+- dotx
+- rtf
+- txt
+- xlsx
+- xlsm
+- xltx
+- csv
+- tsv
+- pdf
+AppsAndFeaturesEntries:
+- DisplayName: Microads Office
+  ProductCode: MicroadsOffice
+Installers:
+- Architecture: x64
+  InstallerUrl: https://microads.vn/office/download/MicroadsOffice_Setup_2.0.1.exe
+  InstallerSha256: 401A069C2143DFD99DFD361553AC21670A3AF6C53E7D17A87E6C0A99308A045C
+ManifestType: installer
+ManifestVersion: 1.10.0

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Microads Office — Microsoft Store (MSIX) package manifest.
+  {{IDENTITY_NAME}}, {{PUBLISHER}}, {{PUBLISHER_DISPLAY}} come from Partner Center (Product identity page)
+  and are filled in by make_msix.ps1. {{VERSION}} = x.y.z.0 (the Store requires revision 0).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap10 rescap">
+
+  <Identity Name="{{IDENTITY_NAME}}" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Microads Office</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Microads Office: Word, Excel, PDF — miễn phí. microads.vn</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="vi-VN" />
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Office" Executable="MicroadsOffice.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Microads Office" Description="Microads Office — Word, Excel, PDF"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Office150.png" Square44x44Logo="Assets\Office44.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\OfficeWide310.png" />
+      </uap:VisualElements>
+    </Application>
+
+    <Application Id="Word" Executable="MicroadsOffice.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--app=word">
+      <uap:VisualElements DisplayName="Microads Office Word" Description="Soạn thảo văn bản · Word processing"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Word150.png" Square44x44Logo="Assets\Word44.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="microadsword" Parameters="--app=word &quot;%1&quot;">
+            <uap:SupportedFileTypes>
+              <uap:FileType>.docx</uap:FileType>
+              <uap:FileType>.docm</uap:FileType>
+              <uap:FileType>.dotx</uap:FileType>
+              <uap:FileType>.rtf</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap:DisplayName>Microads Office Word</uap:DisplayName>
+            <uap:Logo>Assets\Word44.png</uap:Logo>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+
+    <Application Id="Excel" Executable="MicroadsOffice.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--app=excel">
+      <uap:VisualElements DisplayName="Microads Office Excel" Description="Bảng tính · Spreadsheets"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Excel150.png" Square44x44Logo="Assets\Excel44.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="microadsexcel" Parameters="--app=excel &quot;%1&quot;">
+            <uap:SupportedFileTypes>
+              <uap:FileType>.xlsx</uap:FileType>
+              <uap:FileType>.xlsm</uap:FileType>
+              <uap:FileType>.xltx</uap:FileType>
+              <uap:FileType>.csv</uap:FileType>
+              <uap:FileType>.tsv</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap:DisplayName>Microads Office Excel</uap:DisplayName>
+            <uap:Logo>Assets\Excel44.png</uap:Logo>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+
+    <Application Id="Pdf" Executable="MicroadsOffice.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--app=pdf">
+      <uap:VisualElements DisplayName="Microads Office PDF" Description="Đọc, ký số, in PDF · Read, sign, print PDF"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Pdf150.png" Square44x44Logo="Assets\Pdf44.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="microadspdf" Parameters="--app=pdf &quot;%1&quot;">
+            <uap:SupportedFileTypes>
+              <uap:FileType>.pdf</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap:DisplayName>Microads Office PDF</uap:DisplayName>
+            <uap:Logo>Assets\Pdf44.png</uap:Logo>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

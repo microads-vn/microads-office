@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: Microads.Office
+PackageVersion: 2.0.1
+PackageLocale: en-US
+Publisher: Microads Technology Co., Ltd.
+PublisherUrl: https://microads.vn
+PublisherSupportUrl: https://microads.vn/office/
+PrivacyUrl: https://microads.vn/office/privacy
+Author: Microads Technology Co., Ltd.
+PackageName: Microads Office
+PackageUrl: https://microads.vn/office/
+License: Freeware
+Copyright: © Microads — microads.vn
+ShortDescription: Free office suite with a word processor, spreadsheets and a PDF reader with digital signatures.
+Description: |-
+  Microads Office is a free office suite published by Microads Technology Co., Ltd. (Vietnam).
+  It contains Word (documents, .docx), Excel (spreadsheets with formulas and charts, .xlsx/.csv) and PDF
+  (read, digitally sign and print). Vietnamese and English user interface, no account needed.
+  Updates are digitally signed by Microads and verified before they are installed.
+Moniker: microads-office
+Tags:
+- docx
+- excel
+- office
+- office-suite
+- pdf
+- pdf-reader
+- spreadsheet
+- vietnamese
+- word
+- xlsx
+ReleaseNotesUrl: https://microads.vn/office/
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

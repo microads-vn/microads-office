@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>CA1416;SYSLIB0057</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MicroadsOffice.Core\MicroadsOffice.Core.csproj" />
+    <ProjectReference Include="..\..\src\MicroadsOffice\MicroadsOffice.csproj" />
+    <ProjectReference Include="..\..\src\MicroadsOffice.Pdf\MicroadsOffice.Pdf.csproj" />
+    <ProjectReference Include="..\..\src\MicroadsOffice.UI\MicroadsOffice.UI.csproj" />
+  </ItemGroup>
+</Project>

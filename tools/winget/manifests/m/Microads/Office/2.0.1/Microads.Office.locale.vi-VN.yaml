@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+
+PackageIdentifier: Microads.Office
+PackageVersion: 2.0.1
+PackageLocale: vi-VN
+Publisher: Công ty TNHH Công nghệ Microads
+PublisherUrl: https://microads.vn
+PublisherSupportUrl: https://microads.vn/office/
+PrivacyUrl: https://microads.vn/office/privacy
+Author: Công ty TNHH Công nghệ Microads
+PackageName: Microads Office
+PackageUrl: https://microads.vn/office/
+License: Miễn phí
+ShortDescription: Bộ ứng dụng văn phòng miễn phí gồm soạn thảo văn bản, bảng tính và đọc, ký số PDF.
+Description: |-
+  Microads Office là bộ ứng dụng văn phòng miễn phí do Công ty TNHH Công nghệ Microads phát hành.
+  Gồm Word (soạn thảo văn bản, .docx), Excel (bảng tính, công thức, biểu đồ, .xlsx/.csv) và PDF (đọc, ký số, in).
+  Giao diện tiếng Việt và tiếng Anh, không cần tài khoản. Bản cập nhật có chữ ký số của Microads và được kiểm tra trước khi cài.
+Tags:
+- excel
+- ky-so
+- office
+- pdf
+- van-phong
+- word
+ManifestType: locale
+ManifestVersion: 1.10.0
