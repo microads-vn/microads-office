@@ -31,21 +31,30 @@ Trang bắt buộc: https://microads.vn/office/code-signing · Chính sách quy�
 1. Mở https://signpath.org/apply → làm theo biểu mẫu (đăng nhập/đăng ký tài khoản SignPath bằng Gmail công ty, **bật MFA** khi được hỏi).
 2. Điền theo bảng sau (bằng tiếng Anh, sao chép nguyên văn):
 
-| Trường | Nội dung |
-|---|---|
-| Project name | `Microads Office` |
-| Repository URL | `https://github.com/microads-vn/microads-office` |
-| Project website / Download URL | `https://microads.vn/office/` (trang này phải có câu nhắc SignPath Foundation — xem lưu ý cuối) |
-| Code signing policy URL | `https://microads.vn/office/code-signing` |
-| Privacy policy URL | `https://microads.vn/office/privacy` |
-| License | `GPL-3.0-only` |
-| Build system | `GitHub Actions (.github/workflows/release.yml)` |
-| Artifacts to sign | `Windows executables: MicroadsOffice.exe (suite, distributed as MicroadsOffice_Setup_<version>.exe) and MicroadsOffice_Setup.exe (web installer)` |
-| Organization / maintainer | `Microads Technology Company Limited (Công ty TNHH Công nghệ Microads), Ho Chi Minh City, Vietnam — tax code 0319785225 — https://microads.vn` |
-| Contact | Gmail công ty; người đại diện: Phạm Thị Bé Bi (Legal representative) |
+Biểu mẫu (HubSpot, kiểm tra 16/11/2026) có đúng các ô sau, theo thứ tự:
 
+| Ô trên biểu mẫu | Nội dung |
+|---|---|
+| Project Name* | `Microads Office` |
+| Repository URL* | `https://github.com/microads-vn/microads-office` |
+| Homepage URL* | `https://microads.vn/office/` |
+| Download URL | `https://microads.vn/office/` (trang này có nút tải **và** câu nhắc SignPath Foundation trong mục "Cài đặt an toàn") |
+| Privacy Policy URL | `https://microads.vn/office/privacy` |
 | Wikipedia URL (optional) | để trống (dự án chưa có bài Wikipedia) |
-| Category | chọn mục gần nhất với "Productivity" / "Office" (nếu không có: "Utilities" hoặc "Other") |
+| Tagline* | xem dưới |
+| Category* (chọn) | `Productivity` |
+| Description* | xem dưới |
+| Reputation* | xem dưới (cuối đoạn có link Code signing policy vì biểu mẫu không có ô riêng) |
+| Maintainer Type (chọn) | `For-profit company or corporate-backed project` |
+| Build System* (chọn) | `GitHub Actions` |
+| First Name* / Last Name* | `Thị Bé Bi` / `Phạm` (người đại diện theo pháp luật) |
+| Email* | Gmail công ty |
+| Company Name | `Microads Technology Company Limited` |
+| Primary Discovery Channel* (chọn) | `AI / LLM tools`; ô nguồn cụ thể: `Claude (Anthropic)` |
+| Ô đồng ý | Tích **Code of Conduct** (bắt buộc) và **store and process my personal data** (bắt buộc); để trống ô nhận thư quảng cáo |
+
+Biểu mẫu **không** có ô chọn chứng thư hay thời hạn: chứng thư là của SignPath Foundation (đứng tên họ, họ tự gia hạn); mỗi chữ ký
+có dấu thời gian nên tệp đã ký vẫn hợp lệ sau khi chứng thư hết hạn.
 
 **Tagline** (một câu):
 > Free, open source office suite for Windows: word processor, spreadsheet and PDF reader with digital signatures.
@@ -65,11 +74,11 @@ Trang bắt buộc: https://microads.vn/office/code-signing · Chính sách quy�
 > signed with our own ECDSA release key that the apps and the update server verify, and are reported clean by Microsoft Defender and
 > Google Safe Browsing. Because the installer is unsigned, Windows SmartScreen and browsers warn new users; signing through SignPath
 > Foundation would let them verify that the software they download is exactly what was built from our public source code.
+> Code signing policy: https://microads.vn/office/code-signing
 
-Các ô sau Reputation (nếu form hỏi): giấy phép, hệ thống build, tệp cần ký, tổ chức, liên hệ → lấy ở bảng trên. Ô hỏi xác nhận
-MFA / đồng ý điều khoản → chỉ tích khi đã bật MFA (Bước 1) và đã đọc https://signpath.org/terms.
+Chỉ tích ô Code of Conduct khi đã bật MFA (Bước 1) và đã đọc https://signpath.org/terms.
 
-3. Gửi đơn. SignPath Foundation xét duyệt (thường vài ngày đến vài tuần) và trả lời qua email.
+3. Gửi đơn (**Submit**, làm reCAPTCHA nếu được hỏi). SignPath Foundation xét duyệt (thường vài ngày đến vài tuần) và trả lời qua email.
 
 ### Bước 3 — Sau khi được duyệt (em làm tiếp cùng anh/chị)
 SignPath gửi thông tin đăng nhập. Trong SignPath (app.signpath.io):
@@ -89,9 +98,9 @@ SignPath gửi thông tin đăng nhập. Trong SignPath (app.signpath.io):
    của SignPath Foundation (đã được nhiều dự án dùng) nên cảnh báo của Windows/Chrome hết nhanh hơn nhiều.
 
 ## Lưu ý
-- Ô *Download URL* yêu cầu trang tải **có nhắc tới SignPath Foundation**. Trang `code-signing` có câu đó nhưng không có nút tải; trang chủ
-  `microads.vn/office/` có nút tải nhưng (tính đến 16/11/2026) chỉ có liên kết "Code signing policy", chưa có chữ "SignPath". Nên thêm câu
-  "Free code signing provided by SignPath.io, certificate by SignPath Foundation" vào trang chủ rồi điền trang chủ làm Download URL.
+- Ô *Download URL* yêu cầu trang tải **có nhắc tới SignPath Foundation**. Từ 16/11/2026 trang chủ `microads.vn/office/` (có nút tải) mang câu
+  "Free code signing provided by SignPath.io, certificate by SignPath Foundation" trong mục "Cài đặt an toàn" (`id="signpath-notice"`,
+  `server/dev/test_site.py` kiểm tra), ngoài trang `code-signing`. Đừng xóa câu này khi sửa trang chủ.
 - "Reputation" là điểm yếu: kho GitHub tạo ngày 16/11/2026, 0 sao; mới khoảng 15 lượt tải. SignPath có thể từ chối hoặc hẹn nộp lại;
   khi đó tăng độ phổ biến (winget, người dùng thật, sao GitHub) rồi nộp lại.
 - Tên nhà phát hành trên chữ ký là **SignPath Foundation** (không phải Microads) — đây là điều kiện của chương trình miễn phí.
@@ -102,5 +111,7 @@ SignPath gửi thông tin đăng nhập. Trong SignPath (app.signpath.io):
 
 - Xong: kho mã công khai github.com/microads-vn/microads-office (GPL-3.0), build tự động trên GitHub chạy đạt, trang
   microads.vn/office/code-signing, bản 2.0.2 có tùy chọn quyền riêng tư (đã build và kiểm thử, chờ phát hành).
-- Chờ anh/chị: (1) bật xác thực 2 lớp GitHub, (2) gửi đơn tại signpath.org/apply theo bảng ở Bước 2.
+- Xong: xác thực 2 lớp GitHub (anh/chị đã bật); trang chủ có câu SignPath Foundation (đã triển khai); đơn tại signpath.org/apply đã được
+  điền sẵn theo bảng ở Bước 2.
+- Chờ anh/chị: xem lại, bấm **Submit** (và reCAPTCHA); sau đó chờ email của SignPath Foundation.
 - Sau khi SignPath duyệt: làm Bước 3 rồi Bước 4 (gắn thẻ v2.0.2 → duyệt ký → phát hành bản có chữ ký, thay trình cài đặt trực tuyến bằng bản có chữ ký).
