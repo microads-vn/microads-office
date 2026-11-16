@@ -509,9 +509,16 @@ public sealed class OfficeSettingsDialog : DialogBase
         }
         var auto = new CheckBox
         {
-            Name = "chkAutoUpdate", Text = Loc.T("Tự động kiểm tra phiên bản mới (kết nối microads.vn, chỉ gửi số phiên bản)", "Check for new versions automatically (contacts microads.vn, sends only the version number)"),
+            Name = "chkAutoUpdate", Text = Loc.T("Thông báo khi có phiên bản mới (kiểm tra microads.vn, chỉ gửi số phiên bản)", "Notify me about new versions (checks microads.vn, sends only the version number)"),
             Checked = OfficeConfig.Current.AutoCheckUpdates, Dock = DockStyle.Top, Height = Dpi.Scale(30)
         };
+        var autoInstall = new CheckBox
+        {
+            Name = "chkAutoInstall", Text = Loc.T("Tự cài bản cập nhật khi Microads yêu cầu cập nhật toàn bộ", "Install updates by itself when Microads asks everyone to update"),
+            Checked = OfficeConfig.Current.AutoInstallForcedUpdates, Dock = DockStyle.Top, Height = Dpi.Scale(30)
+        };
+        auto.CheckedChanged += (_, _) => autoInstall.Enabled = auto.Checked;
+        autoInstall.Enabled = auto.Checked;
         var privacy = new LinkLabel
         {
             Name = "lnkPrivacy", Dock = DockStyle.Top, Height = Dpi.Scale(24), Padding = new Padding(Dpi.Scale(18), 0, 0, 0),
@@ -532,6 +539,7 @@ public sealed class OfficeSettingsDialog : DialogBase
         Body.Controls.Add(ver);
         Body.Controls.Add(data);
         Body.Controls.Add(check);
+        Body.Controls.Add(autoInstall);
         Body.Controls.Add(privacy);
         Body.Controls.Add(auto);
         Body.Controls.Add(row);

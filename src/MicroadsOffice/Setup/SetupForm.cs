@@ -197,7 +197,7 @@ public sealed class SetupForm : Form
         _desktop = Chk("chkDesktop", Loc.T("Tạo lối tắt Word, Excel, PDF trên màn hình Desktop", "Create Word, Excel and PDF shortcuts on the Desktop"), _opts.DesktopShortcuts);
         _assoc = Chk("chkAssoc", Loc.T("Mở tệp .docx, .xlsx, .csv, .pdf bằng Microads Office", "Open .docx, .xlsx, .csv and .pdf files with Microads Office"), _opts.FileAssociations);
         _launch = Chk("chkLaunch", Loc.T("Mở Microads Office sau khi cài", "Start Microads Office after installing"), true);
-        _autoUpdate = Chk("chkAutoUpdate", Loc.T("Tự động kiểm tra bản cập nhật từ microads.vn (chỉ gửi số phiên bản)", "Check microads.vn for updates automatically (sends only the version number)"), _opts.AutoUpdate);
+        _autoUpdate = Chk("chkAutoUpdate", Loc.T("Thông báo khi có phiên bản mới (kiểm tra microads.vn, chỉ gửi số phiên bản)", "Notify me about new versions (checks microads.vn, sends only the version number)"), _opts.AutoUpdate);
         var privacyText = Loc.T("Bỏ chọn thì ứng dụng không tự kết nối Internet. Xem chính sách quyền riêng tư", "When unchecked the apps never connect to the Internet on their own. See the privacy policy");
         var privacyLink = Loc.T("chính sách quyền riêng tư", "privacy policy");
         var privacy = new LinkLabel

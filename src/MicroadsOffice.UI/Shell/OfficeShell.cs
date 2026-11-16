@@ -171,11 +171,24 @@ public static class OfficeShell
             ChangeLanguage(main, d.SelectedLanguage);
     }
 
-    /// <summary>Shows the promotional notice; called when a document is opened from Explorer (command line / other instance).</summary>
+    /// <summary>Shows the Microads introduction when a document is opened with Word / Excel / PDF (Explorer, "Open with", another instance).</summary>
     public static void OnFileOpenedFromShell(Form owner)
     {
         var p = PromoInfo.Effective;
         if (!p.Enabled || !p.ShowOnFileOpen) return;
+        ShowPromo(owner);
+    }
+
+    /// <summary>Shows the Microads introduction every time Word, Excel or PDF starts (switchable from microads.vn/office/admin).</summary>
+    public static void OnAppStarted(Form owner)
+    {
+        var p = PromoInfo.Effective;
+        if (!p.Enabled || !p.ShowOnStart) return;
+        ShowPromo(owner);
+    }
+
+    private static void ShowPromo(Form owner)
+    {
         if (Environment.GetEnvironmentVariable("MICROADS_NO_PROMO") == "1") return;
         try
         {
@@ -236,6 +249,14 @@ public static class OfficeShell
             // Microsoft Store edition: the manifest still refreshes promo content, but updates come from the Store.
             if (StorePackage.IsPackaged) return;
             if (m?.Latest == null || main.IsDisposed) return;
+            if (UpdateService.IsForced(m) && !OfficeConfig.Current.AutoInstallForcedUpdates)
+            {
+                // "Update everyone" order, but the user prefers not to be interrupted: notice only, they click Update.
+                if (!main.IsDisposed)
+                    Toast.Show(main, Loc.F("Microads khuyên cập nhật lên phiên bản {0}.", "Microads recommends updating to version {0}.", m.Latest.Version),
+                        Loc.T("Cập nhật", "Update"), () => CheckForUpdatesInteractive(main));
+                return;
+            }
             if (UpdateService.IsForced(m))
             {
                 // "Update everyone" order from microads.vn/office: install silently, then offer a restart.

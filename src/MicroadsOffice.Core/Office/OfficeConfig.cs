@@ -12,7 +12,10 @@ public sealed class OfficeConfig
 {
     /// <summary>"vi" / "en"; null until the user picked a language (first run).</summary>
     public string? Language { get; set; }
+    /// <summary>Check microads.vn for new versions and show a notice (the only network access the apps make on their own).</summary>
     public bool AutoCheckUpdates { get; set; } = true;
+    /// <summary>When Microads orders "update everyone": install silently (true) or only show a notice with an Update button (false).</summary>
+    public bool AutoInstallForcedUpdates { get; set; } = true;
     public DateTime? LastUpdateCheckUtc { get; set; }
     public string? SkippedVersion { get; set; }
     /// <summary>Id of the last "update everyone" command already applied, so it runs once.</summary>
@@ -132,6 +135,8 @@ public sealed class PromoInfo
 {
     public bool Enabled { get; set; } = true;
     public bool ShowOnFileOpen { get; set; } = true;
+    /// <summary>Show the Microads introduction every time Word, Excel or PDF starts.</summary>
+    public bool ShowOnStart { get; set; } = true;
     public string Website { get; set; } = Product.Website;
     public string WebsiteLabel { get; set; } = Product.WebsiteLabel;
     public LocText Company { get; set; } = new("Công ty TNHH Công nghệ Microads", "Microads Technology Co., Ltd.");

@@ -121,6 +121,7 @@ try:
     # ---- manifest
     st, hd, body = get('/api/manifest.json?v=web-setup'); m = json.loads(body)
     check(m['latest']['version'] == ver and m['latest']['url'] == f'{BASE}/download/{full_name}', 'manifest gives the latest release to the web installer')
+    check(m['promo']['showOnStart'] is True, 'manifest tells the apps to show the introduction at start')
     stats = json.load(open(os.path.join(data, 'stats', time.strftime('%Y-%m-%d') + '.json')))
     check(stats.get('web-setup') == 1, 'web installer runs counted separately ("web-setup")')
 
@@ -139,6 +140,7 @@ try:
     check('web-setup: 1' in hp, 'admin statistics list web installer runs')
     st, _, b = get('/admin/?tab=promo', op); hp = b.decode()
     check('id="winget"' in hp and 'name="wingetId"' in hp and not php_errors(hp), 'admin: winget package field')
+    check('name="showOnStart"' in hp, 'admin: switch for the introduction at every start')
     st, _, b = get('/admin/', op, {'csrf': csrf(hp), 'action': 'winget', 'wingetId': 'bad id; rm -rf'}); hp = b.decode()
     check('Mã gói winget dạng' in hp, 'admin: invalid winget ID refused')
     st, _, b = get('/admin/', op, {'csrf': csrf(hp), 'action': 'winget', 'wingetId': 'Microads.Office'}); hp = b.decode()

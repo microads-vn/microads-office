@@ -127,7 +127,7 @@ if ($logged && $_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
                 $site = trim((string)($_POST['website'] ?? ''));
                 if (!preg_match('#^https?://#i', $site)) { $flash[] = ['err', 'Liên kết website phải bắt đầu bằng https://']; break; }
                 $c['promo'] = [
-                    'enabled' => isset($_POST['enabled']), 'showOnFileOpen' => isset($_POST['showOnFileOpen']),
+                    'enabled' => isset($_POST['enabled']), 'showOnFileOpen' => isset($_POST['showOnFileOpen']), 'showOnStart' => isset($_POST['showOnStart']),
                     'website' => $site, 'websiteLabel' => trim((string)$_POST['websiteLabel']),
                     'company' => ['vi' => trim((string)$_POST['company_vi']), 'en' => trim((string)$_POST['company_en'])],
                     'headline' => ['vi' => trim((string)$_POST['headline_vi']), 'en' => trim((string)$_POST['headline_en'])],
@@ -285,7 +285,8 @@ $latest = release_by_version($c, $c['latest']);
     <p class="muted">Hiển thị ở thông báo khi khách mở tệp, trang Giới thiệu, trang bắt đầu. Thay đổi có hiệu lực ngay ở lần kiểm tra kế tiếp — không cần phát hành lại.</p>
     <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="promo">
     <label class="chk"><input type="checkbox" name="enabled" <?= $p['enabled'] ? 'checked' : '' ?>> Bật nội dung quảng bá</label>
-    <label class="chk"><input type="checkbox" name="showOnFileOpen" <?= $p['showOnFileOpen'] ? 'checked' : '' ?>> Hiện thông báo khi khách mở tệp từ thư mục</label>
+    <label class="chk"><input type="checkbox" name="showOnFileOpen" <?= $p['showOnFileOpen'] ? 'checked' : '' ?>> Hiện thông báo khi khách mở tệp bằng Word / Excel / PDF</label>
+    <label class="chk"><input type="checkbox" name="showOnStart" <?= ($p['showOnStart'] ?? true) ? 'checked' : '' ?>> Hiện thông báo mỗi khi khách mở Word / Excel / PDF (cần bản 2.0.2 trở lên)</label>
     <div class="row2">
       <label>Liên kết website<input name="website" value="<?= h($p['website']) ?>" required></label>
       <label>Chữ hiển thị của liên kết<input name="websiteLabel" value="<?= h($p['websiteLabel']) ?>" required></label>

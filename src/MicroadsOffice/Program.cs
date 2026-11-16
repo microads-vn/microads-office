@@ -98,10 +98,12 @@ internal static class Program
         };
         if (form.Icon == null && OfficeShell.AppIcon != null) form.Icon = OfficeShell.AppIcon;
         bool fromShell = files.Count > 0 && !Has("no-promo");
+        bool appStart = files.Count == 0 && kind != AppKind.Hub && !Has("no-promo"); // --no-promo: restart after an update / language change
         form.Shown += (_, _) =>
         {
             OfficeShell.StartBackgroundServices(form);
             if (fromShell) OfficeShell.OnFileOpenedFromShell(form);
+            else if (appStart) OfficeShell.OnAppStarted(form);
         };
         SingleInstance.Listen(key, paths =>
         {

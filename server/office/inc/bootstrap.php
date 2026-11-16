@@ -71,6 +71,7 @@ function default_promo(): array {
     return [
         'enabled' => true,
         'showOnFileOpen' => true,
+        'showOnStart' => true,
         'website' => 'https://microads.vn',
         'websiteLabel' => 'microads.vn',
         'company' => ['vi' => 'Công ty TNHH Công nghệ Microads', 'en' => 'Microads Technology Co., Ltd.'],
@@ -125,6 +126,7 @@ function build_manifest(array $c): array {
         'promo' => [
             'enabled' => (bool)$p['enabled'],
             'showOnFileOpen' => (bool)$p['showOnFileOpen'],
+            'showOnStart' => (bool)($p['showOnStart'] ?? true),
             'website' => $p['website'],
             'websiteLabel' => $p['websiteLabel'],
             'company' => $p['company'],
