@@ -31,8 +31,12 @@ public sealed class WorkbookDoc
     public Sheet Sheet => Book.Active;
 
     /// <summary>Records the state before a change (call before every modification).</summary>
+    /// <summary>Increases on every change, undo and redo (the AI pane uses it to undo only its own change).</summary>
+    public long EditSeq { get; private set; }
+
     public void Checkpoint(string label)
     {
+        EditSeq++;
         _undo.Push((Book.Clone(), label));
         if (_undo.Count > MaxUndo)
         {
@@ -53,6 +57,7 @@ public sealed class WorkbookDoc
     {
         if (_undo.Count == 0) return false;
         var (book, label) = _undo.Pop();
+        EditSeq++;
         _redo.Push((Book, label));
         Book = book;
         Modified = true;
@@ -64,11 +69,30 @@ public sealed class WorkbookDoc
     {
         if (_redo.Count == 0) return false;
         var (book, label) = _redo.Pop();
+        EditSeq++;
         _undo.Push((Book, label));
         Book = book;
         Modified = true;
         Recalc();
         return true;
+    }
+
+    /// <summary>State to restore if a change started with <see cref="Checkpoint"/> has to be abandoned.</summary>
+    public (Workbook Book, string Label)[] SaveRedo() => _redo.ToArray();
+
+    /// <summary>
+    /// Abandons the change started by the last <see cref="Checkpoint"/>: the workbook, the redo history and the modified flag go back
+    /// exactly as they were (nothing half-applied ends up in Undo or Redo).
+    /// </summary>
+    public void Rollback((Workbook Book, string Label)[] redo, bool modified)
+    {
+        if (_undo.Count == 0) return;
+        Book = _undo.Pop().Book;
+        _redo.Clear();
+        foreach (var r in redo.Reverse()) _redo.Push(r);
+        Modified = modified;
+        EditSeq++;
+        Recalc();
     }
 
     public void Recalc()

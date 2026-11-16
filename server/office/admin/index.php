@@ -182,7 +182,7 @@ $latest = release_by_version($c, $c['latest']);
   </form>
 <?php else: ?>
   <nav class="tabs">
-    <?php foreach (['overview' => 'Tổng quan', 'publish' => 'Phát hành bản mới', 'promo' => 'Nội dung quảng bá', 'releases' => 'Lịch sử phiên bản', 'account' => 'Tài khoản'] as $k => $v): ?>
+    <?php foreach (['overview' => 'Tổng quan', 'publish' => 'Phát hành bản mới', 'promo' => 'Nội dung quảng bá', 'releases' => 'Lịch sử phiên bản', 'reports' => 'Báo cáo AI', 'account' => 'Tài khoản'] as $k => $v): ?>
       <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $v ?></a>
     <?php endforeach; ?>
   </nav>
@@ -328,6 +328,30 @@ $latest = release_by_version($c, $c['latest']);
       </tr>
     <?php endforeach; ?>
     <?php if (!$c['releases']): ?><tr><td colspan="6" class="muted">Chưa có phiên bản nào.</td></tr><?php endif; ?>
+    </tbody></table>
+  </section>
+
+  <?php elseif ($tab === 'reports'):
+    $reports = [];
+    foreach (array_reverse(glob(MO_DATA . '/reports/*.jsonl') ?: []) as $f) {
+        foreach (array_reverse(file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []) as $l) { $r = json_decode($l, true); if (is_array($r)) $reports[] = $r; if (count($reports) >= 200) break 2; }
+    }
+    $reasonVi = ['harmful' => 'Có hại / nguy hiểm', 'offensive' => 'Xúc phạm / không phù hợp', 'wrong' => 'Sai sự thật', 'privacy' => 'Lộ thông tin riêng tư', 'other' => 'Khác'];
+  ?>
+  <section class="card">
+    <h2>Báo cáo nội dung AI (<?= count($reports) ?>)</h2>
+    <p class="muted">Người dùng bấm <b>Báo cáo</b> dưới câu trả lời của Trợ lý AI (yêu cầu của Microsoft Store, chính sách 11.16). Xem và xử lý: nếu lặp lại theo một kiểu, bổ sung hướng dẫn an toàn cho trợ lý trong phiên bản sau. Không lưu địa chỉ IP.</p>
+    <table><thead><tr><th>Thời gian</th><th>Ứng dụng</th><th>Lý do</th><th>Nội dung</th></tr></thead><tbody>
+    <?php foreach ($reports as $r): ?>
+      <tr>
+        <td><?= h(substr($r['time'] ?? '', 0, 16)) ?><br><span class="muted"><?= h($r['id'] ?? '') ?></span></td>
+        <td><?= h(($r['app'] ?? '') . ' ' . ($r['version'] ?? '')) ?><br><span class="muted"><?= h(($r['provider'] ?? '') . ' · ' . ($r['model'] ?? '')) ?></span></td>
+        <td><?= h($reasonVi[$r['reason'] ?? 'other'] ?? 'Khác') ?></td>
+        <td><?php if (($r['comment'] ?? '') !== ''): ?><b><?= h($r['comment']) ?></b><br><?php endif; ?>
+          <details><summary>Câu hỏi và câu trả lời</summary><p class="muted"><?= nl2br(h($r['question'] ?? '')) ?></p><hr><p><?= nl2br(h($r['answer'] ?? '')) ?></p></details></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (!$reports): ?><tr><td colspan="4" class="muted">Chưa có báo cáo nào.</td></tr><?php endif; ?>
     </tbody></table>
   </section>
 

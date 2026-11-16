@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MicroadsOffice.AI</RootNamespace>
+    <NoWarn>CA1416;SYSLIB0057;WFO1000;WFDEV001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MicroadsOffice.Core\MicroadsOffice.Core.csproj" />
+    <ProjectReference Include="..\MicroadsOffice.UI\MicroadsOffice.UI.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="13.8.0" />
+  </ItemGroup>
+</Project>

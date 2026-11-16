@@ -90,6 +90,7 @@ public sealed partial class WordMainForm : Form, IOfficeAppWindow
         content.Controls.Add(_editorHost);
         content.Controls.Add(split);
         content.Controls.Add(_navPane);
+        InitAi(content);
         Controls.Add(content);
         Controls.Add(status);
         Controls.Add(_ribbon);

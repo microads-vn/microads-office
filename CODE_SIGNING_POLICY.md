@@ -27,6 +27,10 @@ This program will not transfer any information to other networked systems unless
 or operating it, **except** for the automatic update check described in the privacy policy, which is shown during installation and can be
 switched off there (or later in *Help › Settings*): <https://microads.vn/office/privacy>.
 
+The optional **AI assistant** is not connected until the user chooses a service (their ChatGPT account, their own Claude or OpenAI
+API key, their own server, or Claude Desktop). It sends a request only when the user clicks *Send* or a quick action, directly to the
+service the user chose — never through Microads servers — and the user can untick "include the open document" at any time.
+
 ## Release integrity
 
 In addition to the Authenticode signature, every release is signed with the Microads ECDSA P-256 release key; the apps, the web installer and

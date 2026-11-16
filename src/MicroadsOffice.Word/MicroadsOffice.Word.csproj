@@ -11,5 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MicroadsOffice.Core\MicroadsOffice.Core.csproj" />
     <ProjectReference Include="..\MicroadsOffice.UI\MicroadsOffice.UI.csproj" />
+    <ProjectReference Include="..\MicroadsOffice.AI\MicroadsOffice.AI.csproj" />
   </ItemGroup>
 </Project>

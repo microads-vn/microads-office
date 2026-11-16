@@ -164,6 +164,9 @@ public static class OfficeShell
         d.ShowDialog(owner);
     }
 
+    /// <summary>Opens Settings › AI assistant (set by the executable; the AI project sits above this one).</summary>
+    public static Action<IWin32Window>? AiSettingsHandler { get; set; }
+
     public static void ShowSettings(Form main)
     {
         using var d = new OfficeSettingsDialog();

@@ -39,6 +39,31 @@ bằng ngôn ngữ mới cùng các tài liệu đang mở. Ngôn ngữ dùng ch
 - Kiểm tra thủ công: nút **↻** góc phải trên, hoặc thẻ **Trợ giúp › Kiểm tra cập nhật**.
 - Mọi bản cập nhật đều có chữ ký số của Microads; tệp bị sửa/giả mạo sẽ bị từ chối.
 
+### 4b. Trợ lý AI (từ bản 2.0.3)
+Nút **Trợ lý AI** (ngôi sao tím) ở cuối thẻ **Trang chủ** của Word và Excel, và trên thẻ Trang chủ của PDF, mở khung trợ lý bên phải.
+
+**Kết nối (chọn một cách, chỉ làm một lần, dùng chung cho Word/Excel/PDF):**
+
+| Bạn có | Làm thế này |
+|---|---|
+| Tài khoản **ChatGPT Plus / Pro** | Khung trợ lý › **Continue with ChatGPT** → trình duyệt mở trang đăng nhập ChatGPT → đăng nhập và **đồng ý cho Microads Office dùng gói ChatGPT** → quay lại ứng dụng. Không cần khóa API. Xem/giới hạn mức dùng: dòng *Đang dùng gói ChatGPT · Quản lý hạn mức* (mở chatgpt.com/settings/usage). |
+| Gói **Claude Pro / Max** | Cài ứng dụng **Claude Desktop** (claude.ai/download) và đăng nhập ở đó. Trong Microads: Trợ lý AI › **Dùng Claude** › **Kết nối với Claude Desktop** → khởi động lại Claude Desktop. Rồi trong Claude Desktop yêu cầu, ví dụ: *"Đọc văn bản đang mở trong Microads Word và viết lại phần kết luận"*; Claude hỏi bạn trước mỗi thao tác. (Anthropic không cho phần mềm khác đăng nhập tài khoản Claude, nên đây là cách chính thức để dùng gói Claude.) |
+| **Khóa API** Claude hoặc OpenAI | Trợ lý AI › Cài đặt › dán khóa (bấm *Lấy khóa* để mở trang tạo khóa) › **Kiểm tra kết nối** › chọn mô hình › **Lưu**. Trả phí theo mức dùng cho Anthropic/OpenAI. |
+| Máy chủ AI riêng / **Ollama** (miễn phí, chạy trên máy) | Cài Ollama và tải một mô hình; Trợ lý AI › Cài đặt › *Máy chủ tương thích OpenAI* (mặc định `http://127.0.0.1:11434/v1`) › Kiểm tra kết nối › chọn mô hình › Lưu. Dữ liệu không ra khỏi máy/mạng nội bộ. |
+
+**Sử dụng:**
+- Gõ yêu cầu rồi **Enter** (Shift+Enter để xuống dòng), hoặc bấm các nút nhanh: Word — *Tóm tắt, Viết lại, Sửa chính tả, Dịch sang tiếng Anh/Việt, Rút gọn, Lập dàn ý, Soạn công văn*; Excel — *Giải thích công thức, Viết công thức, Phân tích dữ liệu, Bảng tổng hợp, Vẽ biểu đồ, Làm sạch dữ liệu, Tạo bảng mẫu*; PDF — *Tóm tắt, Điểm cần lưu ý, Dịch trang đang xem, Giải thích đoạn chọn, Trích bảng số liệu*.
+- Muốn sửa một đoạn: **bôi đen** đoạn đó trước rồi yêu cầu ("viết lại trang trọng hơn", "dịch sang tiếng Anh").
+- Khi bạn yêu cầu soạn/sửa, trợ lý **ghi thẳng vào văn bản** (đúng kiểu Tiêu đề 1–3, căn giữa quốc hiệu, danh sách, bảng) hoặc **vào trang tính** (giá trị, công thức, định dạng, biểu đồ, trang mới) và hiện danh sách **Các bước**. Mỗi lần ghi là **một bước Hoàn tác** — bấm **Hoàn tác** dưới câu trả lời hoặc Ctrl+Z.
+- Bỏ chọn *Tự ghi kết quả vào văn bản* nếu muốn xem trước rồi tự bấm **Ghi vào văn bản**. Câu trả lời dạng chữ có nút **Chèn vào văn bản / Thay vùng chọn / Ghi vào ô đang chọn / Sao chép**.
+- Excel: công thức do trợ lý viết được **kiểm tra trước** (cú pháp, tên hàm có trong Microads Excel); nếu có lỗi thì **không ghi gì** và nêu rõ lỗi.
+- **Cuộc trò chuyện mới** (dấu +) xóa lịch sử; **Dừng** để ngắt câu trả lời đang chạy.
+- *Cài đặt › Hướng dẫn luôn áp dụng*: ví dụ "văn phong hành chính, công ty tôi là …".
+
+**Quyền riêng tư:** trợ lý chỉ kết nối khi bạn bấm Gửi; nội dung được gửi thẳng tới dịch vụ bạn chọn (không qua máy chủ Microads). Bỏ chọn
+*Gửi kèm nội dung văn bản đang mở* nếu chỉ muốn hỏi chung. Khóa và phiên đăng nhập được mã hóa trên máy (Windows DPAPI). Đăng xuất / Xóa khóa /
+Ngắt kết nối Claude Desktop trong Cài đặt Trợ lý AI. Chi tiết: https://microads.vn/office/privacy#ai-assistant
+
 ## B. Dành cho quản trị (Microads)
 
 ### 5. Trang quản trị — https://microads.vn/office/admin/

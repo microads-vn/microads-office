@@ -178,6 +178,7 @@ public sealed partial class MainForm : Form, IOfficeAppWindow
         var host = new Panel { Dock = DockStyle.Fill, Name = "contentHost" };
         host.Controls.Add(_tabs);
         host.Controls.Add(_startPage);
+        InitAi(host, home);
         Controls.Add(host);
         Controls.Add(_status);
         Controls.Add(_ribbon);

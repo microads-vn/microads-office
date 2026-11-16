@@ -30,6 +30,14 @@ internal static class Program
 
         // The Microsoft Store edition is installed, updated and removed by Windows: no built-in installer there.
         bool storeEdition = StorePackage.IsPackaged;
+
+        // Claude Desktop starts "MicroadsOffice.exe --mcp": a Model Context Protocol server on stdin/stdout that lets Claude
+        // read and edit the documents open in Microads Word / Excel / PDF (only after the user allowed it in AI settings).
+        if (args.Any(a => a.Equals("--mcp", StringComparison.OrdinalIgnoreCase)))
+        {
+            ConfigureDataDirectory();
+            return MicroadsOffice.AI.Mcp.McpServer.RunStdio();
+        }
         bool setupMode = !storeEdition && (args.Any(a => a.Equals("--install", StringComparison.OrdinalIgnoreCase) || a.Equals("--setup", StringComparison.OrdinalIgnoreCase))
             || Path.GetFileName(Environment.ProcessPath ?? "").Contains("setup", StringComparison.OrdinalIgnoreCase));
         // The installer must not leave a "Data" folder next to the downloaded setup file: it only reads
@@ -42,6 +50,12 @@ internal static class Program
         UpdateService.CurrentVersion = Product.Version;
 
         ApplicationConfiguration.Initialize();
+        OfficeShell.AiSettingsHandler = owner =>
+        {
+            using var d = new MicroadsOffice.AI.UI.AiSettingsDialog();
+            d.ShowDialog(owner);
+            MicroadsOffice.AI.AiSettings.RaiseChanged();
+        };
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => ReportError(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) ReportError(ex); };

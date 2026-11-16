@@ -65,6 +65,7 @@ public sealed partial class ExcelForm : Form, IOfficeAppWindow
         BuildFormulaBar();
         BuildStatusBar();
         BuildBackstage();
+        InitAi();
 
         Tabs.SheetSelected += (_, i) => SwitchSheet(i);
         Tabs.AddClicked += (_, _) => CmdInsertSheet();

@@ -60,6 +60,14 @@ jobs:
           $p = Start-Process tests\MicroadsOffice.Excel.Tests\bin\Release\net10.0-windows\MicroadsOffice.Excel.Tests.exe -ArgumentList "all `"$env:RUNNER_TEMP\excel-test`"" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw 'Excel tests failed' }
 
+      - name: Tests — AI assistant (local fake server, no real account)
+        shell: pwsh
+        run: |
+          foreach ($m in 'core', 'word', 'excel', 'pdf') {
+            $p = Start-Process tests\MicroadsOffice.AI.Tests\bin\Release\net10.0-windows\MicroadsOffice.AI.Tests.exe -ArgumentList "$m `"$env:RUNNER_TEMP\ai-test`" vi" -Wait -PassThru -NoNewWindow
+            if ($p.ExitCode -ne 0) { throw "AI tests ($m) failed" }
+          }
+
       - name: Package (one self-contained executable + web installer)
         shell: pwsh
         run: |

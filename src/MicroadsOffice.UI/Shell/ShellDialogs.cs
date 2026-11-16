@@ -492,7 +492,7 @@ public sealed class OfficeSettingsDialog : DialogBase
 {
     public string SelectedLanguage { get; private set; } = Loc.Lang;
 
-    public OfficeSettingsDialog() : base(Loc.T("Cài đặt Microads Office", "Microads Office settings"), 500, 420)
+    public OfficeSettingsDialog() : base(Loc.T("Cài đặt Microads Office", "Microads Office settings"), 500, OfficeShell.AiSettingsHandler != null ? 470 : 420)
     {
         Name = "settingsDialog";
         var langTitle = new Label { Text = Loc.T("Ngôn ngữ / Language", "Language / Ngôn ngữ"), Dock = DockStyle.Top, Height = Dpi.Scale(26), Font = Theme.UiFontBold };
@@ -535,9 +535,17 @@ public sealed class OfficeSettingsDialog : DialogBase
             Text = Loc.T("Thư mục dữ liệu: ", "Data folder: ") + AppSettings.DataDirectory, LinkColor = Theme.AccentDark
         };
         data.LinkClicked += (_, _) => { try { Directory.CreateDirectory(AppSettings.DataDirectory); Process.Start(new ProcessStartInfo(AppSettings.DataDirectory) { UseShellExecute = true }); } catch { } };
+        var ai = new Button
+        {
+            Name = "btnSettingsAi", Text = Loc.T("Trợ lý AI (ChatGPT, Claude)…", "AI assistant (ChatGPT, Claude)…"), AutoSize = true, Dock = DockStyle.Top, FlatStyle = FlatStyle.Flat,
+            Visible = OfficeShell.AiSettingsHandler != null, Margin = new Padding(0, Dpi.Scale(6), 0, 0)
+        };
+        ai.FlatAppearance.BorderColor = Theme.Border;
+        ai.Click += (_, _) => OfficeShell.AiSettingsHandler?.Invoke(this);
         var ver = new Label { Dock = DockStyle.Top, Height = Dpi.Scale(24), ForeColor = Theme.SubtleInk, Text = Product.SuiteName + " " + Product.VersionText + " · " + Product.PublishedBy };
         Body.Controls.Add(ver);
         Body.Controls.Add(data);
+        Body.Controls.Add(ai);
         Body.Controls.Add(check);
         Body.Controls.Add(autoInstall);
         Body.Controls.Add(privacy);
@@ -547,7 +555,8 @@ public sealed class OfficeSettingsDialog : DialogBase
         AddOkCancel(Loc.T("Lưu", "Save"), Loc.T("Hủy", "Cancel"), (_, _) =>
         {
             var a = auto.Checked;
-            OfficeConfig.Update(c => c.AutoCheckUpdates = a);
+            var ai2 = autoInstall.Checked;
+            OfficeConfig.Update(c => { c.AutoCheckUpdates = a; c.AutoInstallForcedUpdates = ai2; });
             DialogResult = DialogResult.OK;
             Close();
         });

@@ -16,8 +16,8 @@
     <Company>Công ty TNHH Công nghệ Microads (microads.vn)</Company>
     <Description>Microads Office — Word, Excel, PDF. Phát hành bởi Công ty TNHH Công nghệ Microads, luôn luôn miễn phí. microads.vn</Description>
     <Copyright>© 2026 Microads — microads.vn</Copyright>
-    <Version>2.0.2</Version>
-    <FileVersion>2.0.2.0</FileVersion>
+    <Version>2.0.3</Version>
+    <FileVersion>2.0.3.0</FileVersion>
     <NoWarn>CA1416;SYSLIB0057;WFO1000;WFDEV001</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
@@ -28,6 +28,7 @@
     <ProjectReference Include="..\MicroadsOffice.Pdf\MicroadsOffice.Pdf.csproj" />
     <ProjectReference Include="..\MicroadsOffice.Word\MicroadsOffice.Word.csproj" />
     <ProjectReference Include="..\MicroadsOffice.Excel\MicroadsOffice.Excel.csproj" />
+    <ProjectReference Include="..\MicroadsOffice.AI\MicroadsOffice.AI.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- PDFium is embedded so that Microads Office ships as ONE executable (extracted on first use). -->

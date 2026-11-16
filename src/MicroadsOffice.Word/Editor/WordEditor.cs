@@ -77,6 +77,7 @@ public sealed class WordEditor : ScrollableControl
         set
         {
             _doc = value;
+            EditSeq++;
             _undo.Clear(); _redo.Clear();
             _anchor = _caret = new DocPos(0, 0);
             _pending = null;
@@ -138,8 +139,12 @@ public sealed class WordEditor : ScrollableControl
     // ------------------------------------------------------------------ undo
 
     /// <summary>Runs a document change as one undoable step.</summary>
+    /// <summary>Increases on every change, undo, redo and new document (the AI pane uses it to undo only its own change).</summary>
+    public long EditSeq { get; private set; }
+
     public void Edit(string kind, Action change)
     {
+        EditSeq++;
         bool coalesce = kind is "type" or "back" && _lastEditKind == kind && (DateTime.Now - _lastEditTime).TotalSeconds < 3 && _undo.Count > 0;
         if (!coalesce) PushUndo();
         _redo.Clear();
@@ -160,6 +165,7 @@ public sealed class WordEditor : ScrollableControl
     public void Undo()
     {
         if (_undo.Count == 0) return;
+        EditSeq++;
         _redo.Add((_doc, _anchor, _caret));
         var (d, a, c) = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
@@ -172,6 +178,7 @@ public sealed class WordEditor : ScrollableControl
     public void Redo()
     {
         if (_redo.Count == 0) return;
+        EditSeq++;
         _undo.Add((_doc, _anchor, _caret));
         var (d, a, c) = _redo[^1];
         _redo.RemoveAt(_redo.Count - 1);

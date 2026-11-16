@@ -13,7 +13,8 @@
     build.ps1 -CodeSignThumbprint <SHA1 thumbprint of the OV code-signing certificate on its USB token / cloud HSM>
     (or set MICROADS_CODESIGN_THUMBPRINT). The token PIN is asked by the CA driver.
   Microsoft Store package (no SmartScreen / browser warnings at all, signed by Microsoft):
-    build.ps1 -Store -StoreIdentityName <from Partner Center> -StorePublisher "CN=<from Partner Center>"
+    build.ps1 -Store -StoreIdentityName MicroadsTech.MicroadsOffice -StorePublisher "CN=1BE10500-500A-4011-8C02-028DAF5EF854" [-StorePublisherDisplay "Microads Tech"]
+    (values: Partner Center › Apps and games › Microads Office › Product identity; the display name must match it exactly)
 
   Web installer (release\web-setup\MicroadsOffice_Setup.exe, the main download button on microads.vn/office):
     a small program that NEVER changes and always installs the latest signed release, so the reputation it earns with
@@ -23,7 +24,7 @@
   winget: -Publish also writes tools\winget\manifests\...\<version> for the Windows Package Manager pull request.
 #>
 param([switch]$UiTests, [switch]$Publish, [switch]$ForceUpdate, [string]$NotesVi, [string]$NotesEn, [switch]$SkipTests,
-      [string]$CodeSignThumbprint = $env:MICROADS_CODESIGN_THUMBPRINT, [switch]$Store, [string]$StoreIdentityName, [string]$StorePublisher,
+      [string]$CodeSignThumbprint = $env:MICROADS_CODESIGN_THUMBPRINT, [switch]$Store, [string]$StoreIdentityName, [string]$StorePublisher, [string]$StorePublisherDisplay = 'Microads Tech',
       [switch]$WebSetupOnly, [switch]$NewWebSetup)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -72,6 +73,11 @@ try {
     Write-Host "`n== Excel tests ==" -ForegroundColor Cyan
     $p = Start-Process -FilePath "$root\tests\MicroadsOffice.Excel.Tests\bin\Release\net10.0-windows\MicroadsOffice.Excel.Tests.exe" -ArgumentList "all `"$b\excel-test`"" -Wait -PassThru -NoNewWindow
     if ($p.ExitCode -ne 0) { throw 'Excel tests failed' }
+    Write-Host "`n== AI assistant tests (local fake server: sign-in, providers, MCP, Word/Excel panes) ==" -ForegroundColor Cyan
+    foreach ($m in 'core', 'word', 'excel', 'pdf') {
+      $p = Start-Process -FilePath "$root\tests\MicroadsOffice.AI.Tests\bin\Release\net10.0-windows\MicroadsOffice.AI.Tests.exe" -ArgumentList "$m `"$b\ai-test`" vi" -Wait -PassThru -NoNewWindow
+      if ($p.ExitCode -ne 0) { throw "AI tests ($m) failed" }
+    }
   }
 
   Write-Host "`n== Package: one self-contained executable ==" -ForegroundColor Cyan
@@ -110,7 +116,7 @@ try {
   if ($Store) {
     Write-Host "`n== Microsoft Store package (MSIX) ==" -ForegroundColor Cyan
     if (-not $StoreIdentityName -or -not $StorePublisher) { throw '-Store needs -StoreIdentityName and -StorePublisher from Partner Center (Product identity)' }
-    & "$root\tools\store\make_msix.ps1" -IdentityName $StoreIdentityName -Publisher $StorePublisher -Exe "$out\MicroadsOffice.exe"
+    & "$root\tools\store\make_msix.ps1" -IdentityName $StoreIdentityName -Publisher $StorePublisher -PublisherDisplay $StorePublisherDisplay -Exe "$out\MicroadsOffice.exe"
   }
   } # end of -not $WebSetupOnly
 

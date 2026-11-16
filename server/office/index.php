@@ -86,7 +86,6 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
     <p><?= t('<b>Vì sao nên dùng trình cài đặt trực tuyến?</b> Tệp này nhỏ và <b>không bao giờ thay đổi</b> giữa các phiên bản, nên mỗi lượt tải đều giúp Chrome và Windows nhận biết nó — cảnh báo giảm dần rồi hết hẳn, kể cả khi Microads phát hành bản mới. Trình cài đặt tải bản mới nhất từ microads.vn và chỉ chạy khi tệp có <b>chữ ký số hợp lệ của Microads</b>.',
         '<b>Why the web installer?</b> It is small and <b>never changes</b> between versions, so every download helps Chrome and Windows recognise it — the warnings fade and disappear, even when Microads releases a new version. It downloads the latest version from microads.vn and only runs it when the file carries a <b>valid Microads digital signature</b>.') ?></p>
     <?php endif; ?>
-    <p class="muted" id="signpath-notice">Free code signing provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>.</p>
     <p class="muted"><a href="code-signing">Code signing policy</a> · <?= t('mã nguồn công khai tại', 'source code at') ?> <a href="https://github.com/microads-vn/microads-office">github.com/microads-vn/microads-office</a></p>
     <p class="muted"><?= t('Kiểm tra tính toàn vẹn (PowerShell):', 'Verify integrity (PowerShell):') ?> <code>Get-FileHash &lt;<?= t('tệp', 'file') ?>&gt;</code><br>
       <?php if ($web): ?><?= h($web['file']) ?> — SHA-256: <code class="hash" id="sha-web"><?= h($web['sha256']) ?></code><br><?php endif; ?>

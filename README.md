@@ -13,6 +13,7 @@ Always free, no account, Vietnamese and English user interface.
 | **Microads Office Word** | Page-accurate word processor: styles, tables, images, headers/footers, table of contents, Vietnamese administrative document templates (Decree 30/2020), `.docx` / `.rtf` / `.txt` read & write, export to PDF, print |
 | **Microads Office Excel** | Spreadsheets with ~230 functions (incl. `DOCSO` — numbers to Vietnamese words), charts, conditional formatting, sort & filter, `.xlsx` / `.csv` read & write, print / PDF |
 | **Microads Office PDF** | Fast PDF viewer (PDFium), digital signatures (PAdES / PKCS#7 with USB tokens or `.pfx`), signature verification, image stamps, print |
+| **AI assistant** (Word, Excel, PDF) | Side pane that drafts, rewrites, translates and proofreads straight into the document (one undo step), writes formulas / tables / charts into the sheet, summarises PDFs. Connect with **Continue with ChatGPT** (your ChatGPT Plus/Pro plan), a Claude or OpenAI API key, an OpenAI-compatible server (Ollama), or use your Claude Pro/Max plan from **Claude Desktop** through the built-in MCP server (`MicroadsOffice.exe --mcp`) |
 | **Hub & installer** | One self-contained executable; per-user installation without administrator rights; file associations; uninstaller; automatic updates verified with the Microads ECDSA release signature |
 
 Full feature table: [docs/BANG_TINH_NANG.md](docs/BANG_TINH_NANG.md) (Vietnamese). User guide: [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_SU_DUNG.md).
@@ -30,6 +31,9 @@ Requirements: Windows 10 or 11, 64-bit.
 
 Documents never leave your computer. The only connection the apps make on their own is the **update check** (it sends the installed version
 number to `https://microads.vn/office/api/manifest.json`). It can be switched off during installation or later in *Help › Settings*.
+The optional **AI assistant** connects only when you click *Send*, and only to the AI service you chose (your ChatGPT account, your own
+Claude / OpenAI API key, your own server such as Ollama, or Claude Desktop) — never through Microads servers. Keys and sign-ins are
+encrypted with Windows DPAPI and stay on your computer.
 Details: <https://microads.vn/office/privacy>.
 
 ## Building from source

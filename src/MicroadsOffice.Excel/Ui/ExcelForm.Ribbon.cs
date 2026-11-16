@@ -293,6 +293,12 @@ public sealed partial class ExcelForm
             Mi("miSelectBlanks", "Chọn ô trống trong vùng", "Blanks in selection", null, CmdSelectBlanks));
         g.Large(fs);
 
+        g = home.AddGroup("Ai", Loc.T("Trợ lý AI", "AI"));
+        g.Large(B("btnAiAssistant", "Trợ lý\nAI", "AI\nAssistant", MicroadsOffice.AI.UI.AiIcons.Sparkle(true),
+            "Mở Trợ lý AI (ChatGPT, Claude…): viết công thức, phân tích, tạo bảng, vẽ biểu đồ ngay trong trang tính",
+            "Open the AI assistant (ChatGPT, Claude…): write formulas, analyze, build tables and charts right in the sheet", ToggleAi, RibbonButtonSize.Large));
+        g.CollapsedIcon = MicroadsOffice.AI.UI.AiIcons.Sparkle(true);
+
         // =================================================================== INSERT
         var insert = Ribbon.AddPage("Insert", Loc.T("Chèn", "Insert"));
         g = insert.AddGroup("Tables", Loc.T("Bảng", "Tables"));

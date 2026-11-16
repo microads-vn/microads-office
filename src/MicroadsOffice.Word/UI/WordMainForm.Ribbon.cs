@@ -204,6 +204,11 @@ public sealed partial class WordMainForm
         edit.Stack(B("btnFind", Loc.T("Tìm", "Find"), WI.G(WI.Find, false), Loc.T("Tìm (Ctrl+F)", "Find (Ctrl+F)"), () => ShowFind(0)),
             B("btnReplace", Loc.T("Thay thế", "Replace"), WI.G(WI.Replace, false), Loc.T("Thay thế (Ctrl+H)", "Replace (Ctrl+H)"), () => ShowFind(1)),
             B("btnSelectAll", Loc.T("Chọn tất cả", "Select All"), WI.G(WI.Select, false), Loc.T("Chọn tất cả (Ctrl+A)", "Select all (Ctrl+A)"), () => { _ed.SelectAll(); _ed.Focus(); }));
+
+        var ai = home.AddGroup("Ai", Loc.T("Trợ lý AI", "AI"));
+        ai.Large(B("btnAiAssistant", Loc.T("Trợ lý\nAI", "AI\nAssistant"), MicroadsOffice.AI.UI.AiIcons.Sparkle(true),
+            Loc.T("Mở Trợ lý AI (ChatGPT, Claude…): hỏi đáp, soạn, viết lại, dịch, sửa chính tả ngay trong văn bản", "Open the AI assistant (ChatGPT, Claude…): ask, draft, rewrite, translate and proofread right in the document"), ToggleAi));
+        ai.CollapsedIcon = MicroadsOffice.AI.UI.AiIcons.Sparkle(true);
     }
 
     // ------------------------------------------------------------------ Insert
@@ -443,7 +448,7 @@ public sealed partial class WordMainForm
             Chk("btnSubscript", cp.VertAlign == VertAlign.Subscript); Chk("btnSuperscript", cp.VertAlign == VertAlign.Superscript);
             Chk("btnAlignLeft", pp.Align == ParaAlign.Left); Chk("btnAlignCenter", pp.Align == ParaAlign.Center); Chk("btnAlignRight", pp.Align == ParaAlign.Right); Chk("btnJustify", pp.Align == ParaAlign.Justify);
             Chk("btnBullets", pp.List == ListType.Bullet); Chk("btnNumbering", pp.List is not ListType.None and not ListType.Bullet);
-            Chk("btnShowMarks", _ed.ShowMarks); Chk("btnRuler", _ruler.Visible); Chk("btnNavPane", _navPane.Visible); Chk("btnPrintLayout", true);
+            Chk("btnShowMarks", _ed.ShowMarks); Chk("btnRuler", _ruler.Visible); Chk("btnNavPane", _navPane.Visible); Chk("btnAiAssistant", _aiPane is { Visible: true }); Chk("btnPrintLayout", true);
             Chk("btnGridlines", _ed.ShowTableGridlines); Chk("btnSpellAsYouType", _spell.Enabled); Chk("btnFormatPainter", _painter != null); Chk("btnFullScreen", _fullScreen);
             if (!_cboFont.Focused)
             {
