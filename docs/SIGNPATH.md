@@ -35,7 +35,7 @@ Trang bắt buộc: https://microads.vn/office/code-signing · Chính sách quy�
 |---|---|
 | Project name | `Microads Office` |
 | Repository URL | `https://github.com/microads-vn/microads-office` |
-| Project website / download page | `https://microads.vn/office/` |
+| Project website / Download URL | `https://microads.vn/office/` (trang này phải có câu nhắc SignPath Foundation — xem lưu ý cuối) |
 | Code signing policy URL | `https://microads.vn/office/code-signing` |
 | Privacy policy URL | `https://microads.vn/office/privacy` |
 | License | `GPL-3.0-only` |
@@ -44,16 +44,30 @@ Trang bắt buộc: https://microads.vn/office/code-signing · Chính sách quy�
 | Organization / maintainer | `Microads Technology Company Limited (Công ty TNHH Công nghệ Microads), Ho Chi Minh City, Vietnam — tax code 0319785225 — https://microads.vn` |
 | Contact | Gmail công ty; người đại diện: Phạm Thị Bé Bi (Legal representative) |
 
-**Project description** (dán vào ô mô tả):
-> Microads Office is a free, open source (GPL-3.0) office suite for Windows published by Microads Technology Company Limited (Vietnam):
-> a word processor (.docx), a spreadsheet application (.xlsx/.csv, ~230 functions, charts) and a PDF reader with PAdES digital
-> signatures (USB tokens / .pfx), in one self-contained executable with a per-user installer and uninstaller, Vietnamese and English UI.
-> It is used by Vietnamese offices and public administration staff who need free document and digital-signature tools.
-> Releases have been published since November 2026 at https://microads.vn/office/ and are additionally signed with our own ECDSA release key,
-> verified by the apps and the update server. We need Authenticode signing because Windows SmartScreen and Chrome warn our users about the
-> unsigned installer. Builds are produced by GitHub Actions from the public repository; every signing request will be approved manually by
-> the project owner; all team members use MFA. The only automatic network access (update check) is described in our privacy policy,
-> shown during installation and can be switched off there.
+| Wikipedia URL (optional) | để trống (dự án chưa có bài Wikipedia) |
+| Category | chọn mục gần nhất với "Productivity" / "Office" (nếu không có: "Utilities" hoặc "Other") |
+
+**Tagline** (một câu):
+> Free, open source office suite for Windows: word processor, spreadsheet and PDF reader with digital signatures.
+
+**Description** (một đoạn, không liệt kê tính năng theo phiên bản hay thư viện phụ thuộc):
+> Microads Office is a free and open source (GPL-3.0) office suite for Windows. It brings together a word processor, a spreadsheet
+> application and a PDF reader that can digitally sign and verify documents with USB tokens or certificate files, in a single installer
+> with a Vietnamese and English user interface. Its goal is to give individuals, small businesses and public administration staff in
+> Vietnam a free, lightweight tool for everyday document work, including the document templates and digital signatures used in
+> Vietnamese administration. It is developed by Microads Technology Company Limited, Ho Chi Minh City, Vietnam.
+
+**Reputation** (trung thực — SignPath kiểm tra được; không phóng đại số người dùng):
+> Microads Office is a young project: its source code was published on GitHub and its first releases were distributed from
+> https://microads.vn/office/ in November 2026, so its user base is still small and growing. It is developed and maintained by
+> Microads Technology Company Limited, a registered company in Ho Chi Minh City, Vietnam (tax code 0319785225, https://microads.vn),
+> which takes legal responsibility for the project. Releases are built by GitHub Actions from the public repository, are additionally
+> signed with our own ECDSA release key that the apps and the update server verify, and are reported clean by Microsoft Defender and
+> Google Safe Browsing. Because the installer is unsigned, Windows SmartScreen and browsers warn new users; signing through SignPath
+> Foundation would let them verify that the software they download is exactly what was built from our public source code.
+
+Các ô sau Reputation (nếu form hỏi): giấy phép, hệ thống build, tệp cần ký, tổ chức, liên hệ → lấy ở bảng trên. Ô hỏi xác nhận
+MFA / đồng ý điều khoản → chỉ tích khi đã bật MFA (Bước 1) và đã đọc https://signpath.org/terms.
 
 3. Gửi đơn. SignPath Foundation xét duyệt (thường vài ngày đến vài tuần) và trả lời qua email.
 
@@ -75,6 +89,18 @@ SignPath gửi thông tin đăng nhập. Trong SignPath (app.signpath.io):
    của SignPath Foundation (đã được nhiều dự án dùng) nên cảnh báo của Windows/Chrome hết nhanh hơn nhiều.
 
 ## Lưu ý
+- Ô *Download URL* yêu cầu trang tải **có nhắc tới SignPath Foundation**. Trang `code-signing` có câu đó nhưng không có nút tải; trang chủ
+  `microads.vn/office/` có nút tải nhưng (tính đến 16/11/2026) chỉ có liên kết "Code signing policy", chưa có chữ "SignPath". Nên thêm câu
+  "Free code signing provided by SignPath.io, certificate by SignPath Foundation" vào trang chủ rồi điền trang chủ làm Download URL.
+- "Reputation" là điểm yếu: kho GitHub tạo ngày 16/11/2026, 0 sao; mới khoảng 15 lượt tải. SignPath có thể từ chối hoặc hẹn nộp lại;
+  khi đó tăng độ phổ biến (winget, người dùng thật, sao GitHub) rồi nộp lại.
 - Tên nhà phát hành trên chữ ký là **SignPath Foundation** (không phải Microads) — đây là điều kiện của chương trình miễn phí.
 - SignPath có quyền từ chối; nếu cần bổ sung, họ hỏi qua email — chuyển cho em để trả lời.
 - Không bao giờ đưa khóa ký `.build\secrets\*.pem`, mật khẩu VPS hay token lên GitHub (`.gitignore` đã chặn thư mục `.build`).
+
+## Trạng thái (16/11/2026 tối)
+
+- Xong: kho mã công khai github.com/microads-vn/microads-office (GPL-3.0), build tự động trên GitHub chạy đạt, trang
+  microads.vn/office/code-signing, bản 2.0.2 có tùy chọn quyền riêng tư (đã build và kiểm thử, chờ phát hành).
+- Chờ anh/chị: (1) bật xác thực 2 lớp GitHub, (2) gửi đơn tại signpath.org/apply theo bảng ở Bước 2.
+- Sau khi SignPath duyệt: làm Bước 3 rồi Bước 4 (gắn thẻ v2.0.2 → duyệt ký → phát hành bản có chữ ký, thay trình cài đặt trực tuyến bằng bản có chữ ký).
