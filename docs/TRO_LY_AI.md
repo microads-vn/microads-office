@@ -86,3 +86,11 @@ Chạy: `build.ps1` (core/word/excel/pdf), GitHub Actions (như trên), `.build\
 - Thử "Continue with ChatGPT" bằng **tài khoản ChatGPT Plus/Pro thật** (máy chủ OpenAI thật chỉ chấp nhận người thật đăng nhập).
 - Thử **Claude Desktop thật**: bấm Kết nối, khởi động lại Claude Desktop, yêu cầu "Đọc văn bản đang mở trong Microads Word".
 - (Tùy chọn) dán một khóa API Claude/OpenAI thật để thử.
+
+## 8. Trạng thái 17/11/2026 07:00 (bàn giao)
+
+- Mã nguồn 2.0.3 hoàn chỉnh (commit 299525a). Kiểm thử lõi 31/31; kiểm thử giao diện chạy lại trên bản cuối — xem `.build\ai-test\report-ai-*.txt`.
+- Rà soát độc lập: 11 vấn đề, đã sửa hết, mỗi vấn đề có kiểm thử (C08, C27–C31, W17–W19, X08).
+- Chưa làm: build phát hành một lần có `-Store` (MSIX định danh MicroadsTech.MicroadsOffice), thử bản Store trên máy,
+  ảnh chụp Store (chế độ `shots-word` / `shots-excel`), nộp hồ sơ theo `docs/MICROSOFT_STORE.md`.
+- Cần người dùng xác nhận: kết nối Claude Desktop thật (trạng thái "Đang hoạt động"), đăng nhập ChatGPT thật.
