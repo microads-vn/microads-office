@@ -93,10 +93,13 @@ public static class Ui
         do { Application.DoEvents(); Thread.Sleep(3); } while (DateTime.Now < until);
     }
 
-    public static void Wait(Func<bool> cond, string what, int timeoutMs = 15000)
+    public static void Wait(Func<bool> cond, string what, int timeoutMs = 15000) => Wait(cond, () => what, timeoutMs);
+
+    /// <summary>Waits; on timeout the message is computed then (e.g. the status label's text at that moment).</summary>
+    public static void Wait(Func<bool> cond, Func<string> what, int timeoutMs = 15000)
     {
         var until = DateTime.Now.AddMilliseconds(timeoutMs);
-        while (!cond()) { if (DateTime.Now > until) throw new AssertException("Timed out waiting for " + what); Pump(20); }
+        while (!cond()) { if (DateTime.Now > until) throw new AssertException("Timed out waiting for " + what()); Pump(20); }
     }
 
     public static void WaitRequest(AiPane pane)
@@ -419,7 +422,8 @@ public static class WordUiTests
                 d.Show(); Ui.Pump(100);
                 T.False(Ui.Find<Button>(d, "btnAiChatGptSignOut").Enabled, "sign out disabled before sign-in");
                 Ui.Click(Ui.Find<Button>(d, "btnAiChatGptSignIn"));
-                Ui.Wait(() => d.Pending?.IsCompleted == true, "sign-in");
+                Ui.Wait(() => d.Pending?.IsCompleted == true, () => "sign-in; status: " + Ui.Find<Label>(d, "lblAiChatGptStatus").Text
+                    + " | fake server saw: " + string.Join(", ", srv.Requests.Select(q => q.Method + " " + q.Path)));
                 Ui.Wait(() => Ui.Find<Label>(d, "lblAiTestResult").Text.Contains("1"), "models loaded after sign-in", 10000);
                 T.True(Ui.Find<Label>(d, "lblAiChatGptStatus").Text.Contains("nhanvien@example.com"), Ui.Find<Label>(d, "lblAiChatGptStatus").Text);
                 T.Eq(AiProviderKind.ChatGpt, AiSettings.Load().Provider);
@@ -561,6 +565,130 @@ public static class WordUiTests
                 T.Eq("Nội dung gốc", w.Editor.Document.PlainText.Trim());
                 var ans = w.AiPane.LastAnswer!;
                 T.True(ans.Footnote.Contains("cắt ngang") && ans.FindAction("btnAiRetry") != null, ans.Footnote);
+            });
+
+            r.Test("W23 an answer with a table in the MIDDLE: headings and text after the table stay after it (Store screenshot bug)", () =>
+            {
+                AiService.Override = _ => ai;
+                AiSettings.Update(x => { x.Provider = AiProviderKind.Compatible; x.CompatibleModel = "fake-model"; });
+                w!.Editor.Document = Document.CreateBlank();
+                ai.Replies.Enqueue("```microads-document\n## Điều 1. Công việc\n| Nội dung | Thỏa thuận |\n|---|---|\n| Chức danh | Kế toán |\n## Điều 2. Chế độ làm việc\nThời giờ làm việc 8 giờ/ngày.\n```");
+                w.AiPane!.Ask("Soạn điều khoản");
+                Ui.WaitRequest(w.AiPane);
+                var blocks = w.Editor.Document.Blocks;
+                int ti = blocks.FindIndex(b => b is Table);
+                T.True(ti > 0, "table written");
+                var table = (Table)blocks[ti];
+                T.Eq("Nội dung", table.Rows[0].Cells[0].Paragraphs.Single().Text);
+                T.True(blocks[ti + 1] is Paragraph { Text: "Điều 2. Chế độ làm việc" } h && h.Props.OutlineLevel == 2, "heading after the table");
+                T.True(blocks[ti + 2] is Paragraph { Text: "Thời giờ làm việc 8 giờ/ngày." }, "text after the heading");
+                w.Editor.Undo();
+                T.False(w.Editor.Document.Blocks.Any(b => b is Table), "one undo step removes it all");
+            });
+
+            r.Test("W20 'Hủy đăng nhập' stops a ChatGPT sign-in that waits in the browser; the dialog stays usable", () =>
+            {
+                AiService.Override = null;
+                ChatGptAuth.Forget();
+                string? opened = null;
+                ChatGptAuth.OpenBrowser = url => { opened = url; return true; }; // the user never finishes in the browser
+                using var d = new AiSettingsDialog(AiSettingsDialog.Section.ChatGpt);
+                d.Show(); Ui.Pump(100);
+                var cancel = Ui.Find<Button>(d, "btnAiChatGptCancel");
+                T.False(cancel.Visible, "cancel hidden before sign-in");
+                Ui.Click(Ui.Find<Button>(d, "btnAiChatGptSignIn"));
+                Ui.Wait(() => opened != null, "browser opened");
+                T.True(cancel.Visible && cancel.Enabled, "cancel offered while waiting");
+                T.False(Ui.Find<Button>(d, "btnAiChatGptSignIn").Enabled, "sign-in disabled while waiting");
+                var pendingBefore = d.Pending;
+                string trace = ""; int uiThread = Environment.CurrentManagedThreadId;
+                Ui.Find<Label>(d, "lblAiChatGptStatus").TextChanged += (_, _) =>
+                {
+                    if (Ui.Find<Label>(d, "lblAiChatGptStatus").Text.Contains("Đã hủy"))
+                        trace = $"thread {Environment.CurrentManagedThreadId} (ui {uiThread}) " + string.Join(" < ", Environment.StackTrace.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("at ")).Skip(1).Take(14).Select(l => l.Split(" in ")[0][3..]));
+                };
+                Ui.Click(cancel);
+                Ui.Wait(() => d.Pending?.IsCompleted == true, () => $"sign-in cancelled; pending {d.Pending?.Status} (same task: {ReferenceEquals(pendingBefore, d.Pending)}), status '{Ui.Find<Label>(d, "lblAiChatGptStatus").Text}', cancel visible {cancel.Visible}, signIn enabled {Ui.Find<Button>(d, "btnAiChatGptSignIn").Enabled}, other enabled {Ui.Find<LinkLabel>(d, "lnkAiChatGptOther").Enabled} | TRACE {trace}", 5000);
+                T.True(Ui.Find<Label>(d, "lblAiChatGptStatus").Text.Contains("Đã hủy đăng nhập"), Ui.Find<Label>(d, "lblAiChatGptStatus").Text);
+                T.False(cancel.Visible, "cancel hidden again");
+                T.True(Ui.Find<Button>(d, "btnAiChatGptSignIn").Enabled, "can sign in again");
+                T.False(ChatGptAuth.IsSignedIn, "nothing saved");
+                // the loopback listener was closed (nothing keeps waiting for a callback in the background)
+                int port = new Uri(ChatGptAuth.ParseQuery(new Uri(opened!).Query.TrimStart('?'))["redirect_uri"]).Port;
+                using (var probe = new System.Net.Sockets.TcpClient())
+                    T.Throws<System.Net.Sockets.SocketException>(() => probe.Connect(System.Net.IPAddress.Loopback, port), "callback port closed after cancel");
+                opened = null;
+                Ui.Click(Ui.Find<Button>(d, "btnAiChatGptSignIn"));
+                Ui.Wait(() => opened != null, "second sign-in started");
+                int port2 = new Uri(ChatGptAuth.ParseQuery(new Uri(opened!).Query.TrimStart('?'))["redirect_uri"]).Port;
+                d.Close(); Ui.Pump(300);
+                using (var probe2 = new System.Net.Sockets.TcpClient())
+                    T.Throws<System.Net.Sockets.SocketException>(() => probe2.Connect(System.Net.IPAddress.Loopback, port2), "closing the dialog ends the sign-in (port closed)");
+                ChatGptAuth.OpenBrowser = _ => false;
+            });
+
+            r.Test("W21 Save refuses a Claude / OpenAI API-key choice without a key and says what to do", () =>
+            {
+                SecretStore.Write(SecretNames.ClaudeKey, null); SecretStore.Write(SecretNames.OpenAiKey, null);
+                AiSettings.Update(x => x.Provider = AiProviderKind.None);
+                using var d = new AiSettingsDialog(AiSettingsDialog.Section.Claude);
+                d.Show(); Ui.Pump(50);
+                Ui.Find<RadioButton>(d, "rbAiClaudeKey").Checked = true;
+                int native = Ui.NativeDialogs;
+                Ui.Click(Ui.Find<Button>(d, "btnOk")); Ui.Pump(300);
+                T.True(Ui.NativeDialogs > native, "warning shown");
+                T.False(d.IsDisposed || !d.Visible, "dialog stays open");
+                T.Eq(AiProviderKind.None, AiSettings.Load().Provider);
+                Ui.Find<RadioButton>(d, "rbAiOpenAiKey").Checked = true;
+                native = Ui.NativeDialogs;
+                Ui.Click(Ui.Find<Button>(d, "btnOk")); Ui.Pump(300);
+                T.True(Ui.NativeDialogs > native, "warning shown for OpenAI too");
+                // with a key it saves, and the key is stored encrypted, not in office.json
+                Ui.Find<RadioButton>(d, "rbAiClaudeKey").Checked = true;
+                Ui.Find<TextBox>(d, "txtAiClaudeKey").Text = "sk-ant-test";
+                Ui.Click(Ui.Find<Button>(d, "btnOk"));
+                T.Eq(AiProviderKind.ClaudeKey, AiSettings.Load().Provider);
+                T.Eq("sk-ant-test", SecretStore.Read(SecretNames.ClaudeKey));
+                T.False(File.ReadAllText(Path.Combine(MicroadsOffice.Core.AppSettings.DataDirectory, "office.json")).Contains("sk-ant-test"), "key not in office.json");
+                SecretStore.Write(SecretNames.ClaudeKey, null);
+                AiSettings.Update(x => x.Provider = AiProviderKind.None);
+            });
+
+            r.Test("W22 Claude Desktop connected: the pane says to ask in Claude Desktop; Store edition status asks to paste the configuration", () =>
+            {
+                AiService.Override = null;
+                AiSettings.Update(x => { x.Provider = AiProviderKind.None; x.AllowClaudeDesktop = false; });
+                w!.AiPane!.Ask("x"); Ui.Pump(50); // makes sure the setup card is there
+                var note = Ui.Find<Label>(w.AiPane!, "lblAiDesktopConnected");
+                T.False(note.Visible, "no note while Claude Desktop is not connected");
+                AiSettings.Update(x => x.AllowClaudeDesktop = true); Ui.Pump(100);
+                T.True(note.Visible, "note shown once Claude Desktop is allowed");
+                T.True(Ui.Find<LinkLabel>(w.AiPane!, "lnkAiStatus").Text.Contains("Claude Desktop"), Ui.Find<LinkLabel>(w.AiPane!, "lnkAiStatus").Text);
+                // Store edition (cannot write Claude's file): connecting copies the configuration and the status says to paste it
+                Environment.SetEnvironmentVariable("MICROADS_CLAUDE_MANUAL", "1");
+                try
+                {
+                    AiSettings.Update(x => x.AllowClaudeDesktop = false);
+                    using var d = new AiSettingsDialog(AiSettingsDialog.Section.Claude);
+                    d.Show(); Ui.Pump(50);
+                    Ui.DialogHandlers.Clear();
+                    var b = Ui.Find<Button>(d, "btnAiClaudeDesktop");
+                    T.True(b.Text.Contains("Kết nối"), b.Text);
+                    // the confirmation (native) is cancelled by the closer: still not allowed
+                    Ui.Click(b); Ui.Pump(400);
+                    T.False(AiSettings.Load().AllowClaudeDesktop, "cancel = not allowed");
+                    AiSettings.Update(x => x.AllowClaudeDesktop = true);
+                    d.Close();
+                    using var d2 = new AiSettingsDialog(AiSettingsDialog.Section.Claude);
+                    d2.Show(); Ui.Pump(50);
+                    var st = Ui.Find<Label>(d2, "lblAiClaudeDesktopStatus").Text;
+                    T.True(st.Contains("Sao chép cấu hình") && !st.StartsWith("Đã ghi cấu hình"), st);
+                    T.True(Ui.Find<Button>(d2, "btnAiClaudeDesktop").Text.Contains("Ngắt"), "shows Disconnect");
+                    d2.Close();
+                }
+                finally { Environment.SetEnvironmentVariable("MICROADS_CLAUDE_MANUAL", null); AiSettings.Update(x => x.AllowClaudeDesktop = false); }
+                Ui.Pump(100);
+                T.False(note.Visible, "note hidden after disconnecting");
             });
 
             r.Test("W15 Office settings: 'Trợ lý AI…' opens AI settings; 'install updates by itself' is saved", () =>
@@ -729,6 +857,18 @@ public static class ExcelUiTests
                 T.True(f.Doc.CanRedo && f.Doc.RedoLabel == redo[0].Label, "redo history kept");
                 T.Eq(mod, f.Doc.Modified);
                 T.True(f.Doc.EditSeq > seq, "edit sequence moved");
+            });
+
+            r.Test("X09 autofit sizes a formula column by its CALCULATED values (no '####' in a Tổng column)", () =>
+            {
+                ai.Replies.Enqueue("```microads-sheet\n{\"actions\":[{\"addSheet\":\"Doanh thu\"},{\"range\":\"A1\",\"values\":[[\"Chi nhánh\",\"Q1\",\"Q2\",\"Tổng\"],[\"Hà Nội\",125000000,138000000,\"=SUM(B2:C2)\"]]},{\"range\":\"B2:D2\",\"numberFormat\":\"#,##0\"},{\"autofit\":\"A:D\"}]}\n```");
+                f!.AiPane!.Ask("Bảng doanh thu");
+                Ui.WaitRequest(f.AiPane);
+                var s = f.Doc.Sheet;
+                T.Eq("Doanh thu", s.Name);
+                T.True(s.ColWidths.ContainsKey(3) && s.ColWidths.ContainsKey(1), "widths set");
+                double wTotal = s.ColWidths[3], wQ1 = s.ColWidths[1];
+                T.True(wTotal >= wQ1, $"Tổng (263,000,000) at least as wide as Q1 (125,000,000): {wTotal} vs {wQ1}");
             });
 
             r.Test("X07 inserting a chat answer with an invalid formula changes nothing and says why", () =>

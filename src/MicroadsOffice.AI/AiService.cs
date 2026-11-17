@@ -42,7 +42,9 @@ public static class AiService
     /// <summary>One line for the pane header, e.g. "ChatGPT · a@b.com · GPT-x".</summary>
     public static string StatusText(AiSettings s)
     {
-        if (!IsReady(s)) return Loc.T("Chưa kết nối AI", "AI not connected");
+        if (!IsReady(s))
+            return s.AllowClaudeDesktop ? Loc.T("Chưa kết nối AI trong khung này (Claude Desktop: đã kết nối)", "AI not connected in this pane (Claude Desktop: connected)")
+                                        : Loc.T("Chưa kết nối AI", "AI not connected");
         var model = s.ModelFor(s.Provider);
         string who = s.Provider == AiProviderKind.ChatGpt && ChatGptAuth.Current is { } c && c.Email.Length > 0 ? " · " + c.Email : "";
         return AiSettings.ProviderName(s.Provider) + who + (model.Length > 0 ? " · " + model : "");

@@ -25,21 +25,39 @@ public sealed class ClaudeProvider : AiProvider
         return c;
     }
 
+    /// <summary>
+    /// output_config.effort returns a 400 on Sonnet 4.5 / Haiku 4.5 and older models; every newer model accepts "medium".
+    /// The user can pick any model the key lists, so older ones must still work.
+    /// </summary>
+    public static bool SupportsEffort(string model)
+    {
+        var m = model.ToLowerInvariant();
+        string[] old = ["claude-3", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1", "claude-opus-4-0", "claude-opus-4-2025", "claude-sonnet-4-0", "claude-sonnet-4-2025"];
+        return !old.Any(m.StartsWith);
+    }
+
+    /// <summary>Server-side refusal fallbacks ("default" mode) are documented for Fable / Mythos 5.x, Opus 5 / 5.5 and Sonnet 5.5.</summary>
+    public static bool SupportsFallbacks(string model)
+    {
+        var m = model.ToLowerInvariant();
+        return m.StartsWith("claude-fable-5") || m.StartsWith("claude-mythos-5") || m.StartsWith("claude-opus-5") || m.StartsWith("claude-sonnet-5-5");
+    }
+
     public static MessageCreateParams BuildParams(AiRequest req)
     {
         var messages = new List<BetaMessageParam>();
         foreach (var m in req.Messages)
             messages.Add(m.Role == AiRole.User ? new BetaUserMessageParam { Content = m.Text } : new BetaAssistantMessageParam { Content = m.Text });
-        return new MessageCreateParams
+        var p = new MessageCreateParams
         {
             Model = req.Model,
             MaxTokens = 64000,
             System = req.Instructions,
             Messages = messages,
-            OutputConfig = new BetaOutputConfig { Effort = Effort.Medium },
-            Betas = [AnthropicBeta.ServerSideFallback2026_07_01],
-            Fallbacks = new Default(),
         };
+        if (SupportsEffort(req.Model)) p = p with { OutputConfig = new BetaOutputConfig { Effort = Effort.Medium } };
+        if (SupportsFallbacks(req.Model)) p = p with { Betas = [AnthropicBeta.ServerSideFallback2026_07_01], Fallbacks = new Default() };
+        return p;
     }
 
     public override async Task<string> CompleteAsync(AiRequest req, Action<string> onDelta, CancellationToken ct)
@@ -83,8 +101,12 @@ public sealed class ClaudeProvider : AiProvider
     {
         try
         {
+            // every page, not only the first (older models would otherwise be missing from the list)
             var page = await Client().Models.List(cancellationToken: ct);
-            return page.Items.Select(m => new AiModel(m.ID, string.IsNullOrEmpty(m.DisplayName) ? m.ID : m.DisplayName)).ToList();
+            var list = new List<AiModel>();
+            await foreach (var m in page.Paginate(ct))
+                list.Add(new AiModel(m.ID, string.IsNullOrEmpty(m.DisplayName) ? m.ID : m.DisplayName));
+            return list;
         }
         catch (AnthropicUnauthorizedException e) { throw new AiException(Loc.T("Khóa API Claude không đúng hoặc đã bị thu hồi.", "The Claude API key is wrong or was revoked."), "authentication_error", 401, e) { NeedsSignIn = true }; }
         catch (AnthropicApiException e) { throw new AiException(Loc.T("Claude báo lỗi: ", "Claude reported an error: ") + e.Message, "api_error", 0, e); }

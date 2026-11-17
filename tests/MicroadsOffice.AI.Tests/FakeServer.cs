@@ -112,7 +112,8 @@ public sealed class FakeServer : IDisposable
                 lock (Requests) Requests.Add(req);
                 var resp = Override?.Invoke(req) ?? Route(req);
                 var bytes = Encoding.UTF8.GetBytes(resp.Body);
-                var hdr = $"HTTP/1.1 {resp.Status} X\r\nContent-Type: {resp.ContentType}; charset=utf-8\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n";
+                int n2; lock (Requests) n2 = Requests.Count;
+                var hdr = $"HTTP/1.1 {resp.Status} X\r\nContent-Type: {resp.ContentType}; charset=utf-8\r\nContent-Length: {bytes.Length}\r\nx-request-id: req_test_{n2}\r\nConnection: close\r\n\r\n";
                 await s.WriteAsync(Encoding.ASCII.GetBytes(hdr));
                 await s.WriteAsync(bytes);
                 await s.FlushAsync();

@@ -102,7 +102,7 @@ public sealed class AiReportDialog : DialogBase
             try
             {
                 using var http = AiProvider.NewHttp(TimeSpan.FromSeconds(30));
-                using var resp = await http.PostAsJsonAsync(Endpoint, body);
+                using var resp = await UiThread.On(this, http.PostAsJsonAsync(Endpoint, body));
                 if (IsDisposed) return;
                 if (!resp.IsSuccessStatusCode) throw new HttpRequestException(((int)resp.StatusCode).ToString());
                 Sent = true;

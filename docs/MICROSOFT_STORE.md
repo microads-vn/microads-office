@@ -19,6 +19,24 @@ Cập nhật 17/11/2026. SignPath đã từ chối; Microsoft Store là kênh ph
 
 ## Bước 1 — Giữ tên ✅ (đã xong 17/11/2026)
 
+## Trạng thái: đã nộp 17/11/2026 (Submission 1 — In certification)
+
+Giao diện Partner Center thực tế (11/2026) khác vài chỗ so với các bước dưới — khi nộp bản mới, làm theo bảng này:
+
+| Chỗ | Thực tế đã làm |
+|---|---|
+| Start submission | Không có nút: hồ sơ nháp có sẵn ở Application overview, bấm từng dòng |
+| Giá | Ô **Retail price** chọn **0** (= miễn phí, không có chữ "Free"); Free trial: No free trial |
+| Privacy (Properties) | Câu "access, collect, or transmit personal information?" → **Yes** + `https://microads.vn/office/privacy` |
+| Product declarations | Tích: alternate drives, OneDrive backups, **generative AI**. **Bỏ** "record and broadcast clips" (chỉ cho game). Display mode (Mixed Reality): để trống |
+| System requirements | Chỉ tích Keyboard + Mouse ở cột **Recommended**; cột Minimum để trống |
+| Age ratings (IARC) | All Other App Types; Online Content **Yes** (nội dung AI); mọi câu khác **No**; "ratings board / physical media" No → Everyone / PEGI 3 / 3+; tích đồng ý điều khoản IARC |
+| Store listing languages | Tự nhận vi-VN và en-US từ gói (không cần Add/remove) |
+| Search terms | Tên ô là **Keywords** (Enter sau mỗi từ, ≤7, ≤21 chữ). Không dùng "word"/"excel" (nhãn hiệu Microsoft). VI: office, soạn thảo văn bản, bảng tính, ký số PDF, đọc PDF, docx xlsx, trợ lý AI. EN: office suite, word processor, spreadsheet, PDF signature, PDF reader, docx xlsx, AI assistant |
+| Short description | VI: "Bộ ứng dụng văn phòng miễn phí: soạn thảo văn bản, bảng tính, đọc và ký số PDF, kèm Trợ lý AI (ChatGPT, Claude). Giao diện tiếng Việt, mở và lưu tệp .docx, .xlsx." EN: "Free office suite: word processing, spreadsheets, PDF reading and digital signing, with an optional AI assistant (ChatGPT, Claude). Opens and saves .docx and .xlsx files." |
+| Notes for certification | Đã chuyển sang trang **Supplemental info › Additional Testing Information** (ô Description, bấm **Save description** ở đầu trang; Credentials để trống) |
+| runFullTrust | Ô "Why do you need the runFullTrust capability…" trong Submission options |
+
 ## Bước 2 — Tạo hồ sơ nộp (Start submission)
 
 Partner Center › **Apps and games** › **Microads Office** › **Application overview** › **Start submission**. Có 6 mục; làm mục nào

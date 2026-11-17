@@ -347,6 +347,7 @@ public static class Editing
         pos = Clamp(d, pos);
         if (blocks.Count == 0) return pos;
         bool inCell = d.Paragraphs[pos.Para].Cell != null;
+        Paragraph? afterTable = null; // set right after a pasted table: the paragraph that follows it
         for (int bi = 0; bi < blocks.Count; bi++)
         {
             var blk = blocks[bi].CloneBlock();
@@ -357,18 +358,42 @@ public static class Editing
                     // nested tables are not supported: paste the text
                     foreach (var row in t.Rows)
                     {
-                        var line = string.Join("\t", row.Cells.Select(c => string.Join(" ", c.Paragraphs.Select(x => x.Text))));
+                        var line = string.Join("	", row.Cells.Select(c => string.Join(" ", c.Paragraphs.Select(x => x.Text))));
                         pos = InsertText(d, pos, line, d.Paragraphs[pos.Para].PropsAt(pos.Offset));
                         pos = SplitParagraph(d, pos);
                     }
                     continue;
                 }
-                pos = InsertTableBlock(d, pos, t);
+                InsertTableBlock(d, pos, t); // returns the first cell (for "Insert table"); pasting continues AFTER the table
+                int ti = d.Blocks.IndexOf(t);
+                if (ti + 1 < d.Blocks.Count && d.Blocks[ti + 1] is Paragraph next) afterTable = next;
+                else
+                {
+                    var n = d.Styles[StyleIds.Normal];
+                    afterTable = new Paragraph("", n.Char, n.Para) { MarkProps = n.Char };
+                    d.Blocks.Insert(ti + 1, afterTable);
+                    d.StructureChanged();
+                }
+                pos = new DocPos(d.IndexOf(afterTable), 0);
                 continue;
             }
             var src = (Paragraph)blk;
             var p = d.Paragraphs[pos.Para];
-            if (bi > 0) { pos = SplitParagraph(d, pos); p = d.Paragraphs[pos.Para]; if (p.Length == 0) p.Props = src.Props; }
+            if (afterTable != null)
+            {
+                // a paragraph after a pasted table is a new paragraph between the table and what followed it
+                if (afterTable.Length > 0)
+                {
+                    var np = new Paragraph("", src.MarkProps, src.Props) { MarkProps = src.MarkProps };
+                    d.Blocks.Insert(d.Blocks.IndexOf(afterTable), np);
+                    d.StructureChanged();
+                    p = np;
+                }
+                else { p = afterTable; p.Props = src.Props; p.MarkProps = src.MarkProps; }
+                pos = new DocPos(d.IndexOf(p), 0);
+                afterTable = null;
+            }
+            else if (bi > 0) { pos = SplitParagraph(d, pos); p = d.Paragraphs[pos.Para]; if (p.Length == 0) p.Props = src.Props; }
             else if (p.Length == 0 && blocks.Count > 1) p.Props = src.Props;
             int idx = p.SplitAt(pos.Offset);
             p.Runs.InsertRange(idx, src.Runs.Select(r => r.Clone()));

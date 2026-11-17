@@ -14,7 +14,7 @@ public sealed class AiSettingsDialog : DialogBase
 
     readonly RadioButton _rbChatGpt, _rbClaudeKey, _rbOpenAi, _rbCompat;
     readonly Label _chatGptStatus, _desktopStatus, _testResult;
-    readonly Button _signIn, _signOut, _desktop, _test;
+    readonly Button _signIn, _signOut, _cancelSignIn, _desktop, _test;
     readonly LinkLabel _otherAccount;
     readonly TextBox _claudeKey, _openAiKey, _compatUrl, _compatKey, _instructions;
     readonly ComboBox _model;
@@ -48,7 +48,10 @@ public sealed class AiSettingsDialog : DialogBase
         _signIn.FlatAppearance.BorderSize = 0;
         _signIn.Click += (_, _) => StartSignIn(newAccount: false);
         _signOut = Btn(Loc.T("Đăng xuất", "Sign out"), "btnAiChatGptSignOut", (_, _) => SignOut());
-        chatRow.Controls.Add(_signIn); chatRow.Controls.Add(_signOut);
+        // while the browser sign-in is waiting (up to 10 minutes) the user can give up without closing the dialog
+        _cancelSignIn = Btn(Loc.T("Hủy đăng nhập", "Cancel sign-in"), "btnAiChatGptCancel", (_, _) => _cts?.Cancel());
+        _cancelSignIn.Visible = false;
+        chatRow.Controls.Add(_signIn); chatRow.Controls.Add(_signOut); chatRow.Controls.Add(_cancelSignIn);
         gChat.Controls.Add(chatRow);
         _chatGptStatus = new Label { AutoSize = true, MaximumSize = new Size(w - Dpi.Scale(20), 0), Name = "lblAiChatGptStatus", Margin = new Padding(Dpi.Scale(3), Dpi.Scale(4), 0, Dpi.Scale(2)) };
         gChat.Controls.Add(_chatGptStatus);
@@ -132,6 +135,8 @@ public sealed class AiSettingsDialog : DialogBase
             default:
                 (section switch { Section.Claude => _rbClaudeKey, Section.Other => _rbOpenAi, _ => _rbChatGpt }).Checked = true; break;
         }
+        // "Continue with ChatGPT" on the pane's setup card means: use ChatGPT (even if another way was chosen before)
+        if (autoStart && section == Section.ChatGpt) _rbChatGpt.Checked = true;
         LoadModelFor(SelectedKind);
         RefreshAccountState();
 
@@ -144,7 +149,8 @@ public sealed class AiSettingsDialog : DialogBase
         {
             var target = section switch { Section.Claude => gClaude, Section.Other => gOther, Section.ChatGpt => gChat, _ => null };
             if (target != null) _flow.ScrollControlIntoView(target);
-            if (_autoStart && section == Section.ChatGpt && !ChatGptAuth.IsSignedIn) StartSignIn(newAccount: false);
+            // Shown is posted: the dialog may already be closed by then — never start a sign-in nobody can see or cancel
+            if (_autoStart && section == Section.ChatGpt && !ChatGptAuth.IsSignedIn && Visible && !IsDisposed) StartSignIn(newAccount: false);
         };
     }
 
@@ -234,6 +240,10 @@ public sealed class AiSettingsDialog : DialogBase
         _desktopStatus.Text = working
             ? Loc.F("Đang hoạt động — Claude Desktop đã dùng Microads Office lúc {0:HH:mm dd/MM/yyyy}. Trong Claude Desktop hãy yêu cầu, ví dụ: \"Đọc văn bản đang mở trong Microads Word và tóm tắt\".",
                     "Working — Claude Desktop last used Microads Office at {0:HH:mm dd/MM/yyyy}. In Claude Desktop ask e.g. \"Read the document open in Microads Word and summarise it\".", hs!.Time.LocalDateTime)
+            : connected && !ClaudeDesktop.CanEditConfig
+                // Store edition: nothing was written for the user, they paste the configuration themselves
+                ? Loc.T("Đã cho phép, nhưng Claude Desktop chưa khởi động Microads lần nào. Bấm \"Sao chép cấu hình\", dán vào Claude Desktop › Settings › Developer › Edit Config, lưu, rồi THOÁT HẲN Claude Desktop (biểu tượng Claude ở khay hệ thống góc phải dưới › Quit — bấm X chỉ thu nhỏ) và mở lại.",
+                        "Allowed, but Claude Desktop has not started Microads yet. Click \"Copy configuration\", paste it in Claude Desktop › Settings › Developer › Edit Config, save, then QUIT Claude Desktop completely (Claude icon in the system tray › Quit — closing the window only minimises it) and open it again.")
             : connected
                 ? Loc.T("Đã ghi cấu hình, Claude Desktop chưa khởi động Microads lần nào. Hãy THOÁT HẲN Claude Desktop (biểu tượng Claude ở khay hệ thống góc phải dưới › Quit — bấm X chỉ thu nhỏ) rồi mở lại. Vẫn chưa được: bấm \"Sao chép cấu hình\" và dán trong Claude Desktop › Settings › Developer › Edit Config.",
                         "Configuration written; Claude Desktop has not started Microads yet. QUIT Claude Desktop completely (Claude icon in the system tray › Quit — closing the window only minimises it) and open it again. Still nothing: click \"Copy configuration\" and paste it in Claude Desktop › Settings › Developer › Edit Config.")
@@ -292,7 +302,7 @@ public sealed class AiSettingsDialog : DialogBase
         {
             try
             {
-                var models = await Task.Run(() => p.ListModelsAsync(ct), ct);
+                var models = await UiThread.On(this, Task.Run(() => p.ListModelsAsync(ct), ct));
                 if (IsDisposed) return;
                 var current = _model.Text.Trim();
                 _model.Items.Clear();
@@ -312,24 +322,26 @@ public sealed class AiSettingsDialog : DialogBase
 
     void StartSignIn(bool newAccount)
     {
+        if (IsDisposed) return;
         if (newAccount && ChatGptAuth.IsSignedIn &&
             !Msg.Confirm(this, Loc.T("Đăng xuất tài khoản ChatGPT hiện tại và đăng nhập tài khoản khác?", "Sign out of the current ChatGPT account and sign in with another one?"), Loc.T("Tiếp tục", "Continue"), Loc.T("Hủy", "Cancel")))
             return;
         _cts?.Cancel(); _cts = new CancellationTokenSource();
         var ct = _cts.Token;
         _signIn.Enabled = false; _signOut.Enabled = false; _otherAccount.Enabled = false;
+        _cancelSignIn.Visible = true; _cancelSignIn.Enabled = true;
         _chatGptStatus.ForeColor = Theme.SubtleInk;
         Pending = Run();
         async Task Run()
         {
             try
             {
-                if (newAccount) { if (ChatGptAuth.IsSignedIn) await ChatGptAuth.SignOutAsync(ct); ChatGptAuth.Forget(); }
+                if (newAccount) { if (ChatGptAuth.IsSignedIn) await UiThread.On(this, ChatGptAuth.SignOutAsync(ct)); ChatGptAuth.Forget(); }
                 void Status(string msg)
                 {
                     try { if (!IsDisposed && IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) _chatGptStatus.Text = msg; }); } catch (InvalidOperationException) { }
                 }
-                var cred = await Task.Run(() => ChatGptAuth.SignInAsync(newAccount, Status, ct), ct);
+                var cred = await UiThread.On(this, Task.Run(() => ChatGptAuth.SignInAsync(newAccount, Status, ct), ct));
                 if (IsDisposed) return;
                 _rbChatGpt.Checked = true;
                 AiSettings.Update(x => x.Provider = AiProviderKind.ChatGpt);
@@ -340,6 +352,12 @@ public sealed class AiSettingsDialog : DialogBase
                                          "You signed in but did not allow Microads Office to use your ChatGPT plan, so the assistant cannot run. Click Continue with ChatGPT again and allow it, or use an API key."));
                 else TestConnection();
             }
+            catch (OperationCanceledException) when (!IsDisposed)
+            {
+                // "Hủy đăng nhập": the previous sign-in (if any) is untouched
+                RefreshAccountState();
+                _chatGptStatus.Text = Loc.T("Đã hủy đăng nhập. ", "Sign-in cancelled. ") + _chatGptStatus.Text;
+            }
             catch (OperationCanceledException) { }
             catch (Exception e) when (!IsDisposed)
             {
@@ -348,7 +366,7 @@ public sealed class AiSettingsDialog : DialogBase
             }
             finally
             {
-                if (!IsDisposed) { _signIn.Enabled = true; _otherAccount.Enabled = true; _signOut.Enabled = ChatGptAuth.IsSignedIn; }
+                if (!IsDisposed) { _signIn.Enabled = true; _otherAccount.Enabled = true; _signOut.Enabled = ChatGptAuth.IsSignedIn; _cancelSignIn.Visible = false; }
             }
         }
     }
@@ -361,7 +379,7 @@ public sealed class AiSettingsDialog : DialogBase
         Pending = Run();
         async Task Run()
         {
-            bool confirmed = await ChatGptAuth.SignOutAsync(ct);
+            bool confirmed = await UiThread.On(this, ChatGptAuth.SignOutAsync(ct));
             if (IsDisposed) return;
             RefreshAccountState();
             AiSettings.RaiseChanged();
@@ -413,6 +431,11 @@ public sealed class AiSettingsDialog : DialogBase
         if (_openAiKey.Text.Trim().Length > 0) SecretStore.Write(SecretNames.OpenAiKey, _openAiKey.Text.Trim());
         if (_compatKey.Text.Trim().Length > 0) SecretStore.Write(SecretNames.CompatibleKey, _compatKey.Text.Trim());
         var url = _compatUrl.Text.Trim();
+        // an API-key way without a key would leave the assistant silently "not connected"
+        if (kind == AiProviderKind.ClaudeKey && !SecretStore.Has(SecretNames.ClaudeKey))
+        { Msg.Warn(this, Loc.T("Hãy nhập khóa API Claude (bấm \"Lấy khóa\" để tạo khóa trong Claude Console), hoặc chọn cách kết nối khác.", "Enter a Claude API key (click \"Get a key\" to create one in the Claude Console), or choose another way to connect.")); _claudeKey.Focus(); return false; }
+        if (kind == AiProviderKind.OpenAiKey && !SecretStore.Has(SecretNames.OpenAiKey))
+        { Msg.Warn(this, Loc.T("Hãy nhập khóa API OpenAI (bấm \"Lấy khóa\"), hoặc chọn cách kết nối khác.", "Enter an OpenAI API key (click \"Get a key\"), or choose another way to connect.")); _openAiKey.Focus(); return false; }
         if (kind == AiProviderKind.Compatible)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || (u.Scheme != "http" && u.Scheme != "https"))

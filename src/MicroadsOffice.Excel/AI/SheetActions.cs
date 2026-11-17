@@ -287,6 +287,7 @@ public static class SheetActions
                 case "autofit":
                     {
                         var (c1, c2) = Columns(Str(o, "autofit"));
+                        wb.Recalculate(); // widths follow the shown values: formulas written above must be calculated first (else "####")
                         for (int c = c1; c <= c2; c++) AutoFit(sheet, c, measure);
                         other++;
                         break;

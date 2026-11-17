@@ -43,6 +43,7 @@ public static class CoreTests
         Environment.SetEnvironmentVariable("MICROADS_AI_AUTH_BASE", s.Base);
         Environment.SetEnvironmentVariable("MICROADS_AI_OPENAI_BASE", s.Base + "/v1");
         Environment.SetEnvironmentVariable("MICROADS_AI_ANTHROPIC_BASE", s.Base);
+        OpenAiResponsesProvider.RetryDelaysMs = [20, 20]; // the real backoff is seconds
 
         r.Test("C01 secrets are encrypted with DPAPI on disk and read back", () =>
         {
@@ -583,6 +584,141 @@ public static class CoreTests
             Environment.SetEnvironmentVariable("MICROADS_AI_X_TEST", "http://127.0.0.1:5000/v1/");
             T.Eq("http://127.0.0.1:5000/v1", ChatGptAuth.SafeOverride("MICROADS_AI_X_TEST"));
             Environment.SetEnvironmentVariable("MICROADS_AI_X_TEST", null);
+        });
+
+        r.Test("C32 ChatGPT plan errors follow OpenAI's recovery table: no forced re-sign-in for grant/config errors, request id kept, 503 retried, usage limit pauses", () =>
+        {
+            var cfg = OpenAiResponsesProvider.MapCode("chatpass_v2_scope_not_authorized", "m", 403, true, "req_9");
+            T.False(cfg.NeedsSignIn, "grant configuration error is not a sign-in problem");
+            T.True(cfg.Message.Contains("req_9"), cfg.Message);
+            T.False(OpenAiResponsesProvider.MapCode("chatpass_v2_invalid_authorization_context", null, 403, true).NeedsSignIn, "same");
+            T.False(OpenAiResponsesProvider.MapCode("subscription_sharing_invalid_user", null, 401, true).NeedsSignIn, "invalid_user after a good refresh: diagnose, do not sign out");
+            T.True(OpenAiResponsesProvider.MapError(400, """{"error":{"code":"subscription_sharing_unsupported_capability","param":"tools","message":"x"}}""", true).Message.Contains("[tools]"), "error.param shown");
+            T.True(OpenAiResponsesProvider.MapCode("subscription_sharing_route_not_supported", null, 403, true).Message.Contains("Báo cáo"), "route");
+            T.Eq(0, OpenAiResponsesProvider.ParseModels("""{"models":[{"slug":"no-visibility"},{"slug":"hidden","visibility":"hide"}]}""", true).Count);
+
+            var p = new OpenAiResponsesProvider(s.Base + "/v1", _ => Task.FromResult("AT-x"), chatGptPlan: true);
+            var req = new AiRequest("", [new AiMessage(AiRole.User, "x")], "gpt-test");
+            int calls = 0;
+            s.Override = q =>
+            {
+                if (q.Path != "/v1/responses") return null;
+                return ++calls <= 2 ? FakeResponse.Json("""{"error":{"code":"subscription_sharing_usage_unavailable","message":"later"}}""", 503) : FakeResponse.Sse(FakeServer.ResponsesSse("Đã trả lời sau khi thử lại."));
+            };
+            T.Eq("Đã trả lời sau khi thử lại.", Run(() => p.CompleteAsync(req, _ => { }, CancellationToken.None)));
+            T.Eq(3, calls);
+            calls = 0;
+            s.Override = q => q.Path == "/v1/responses" ? FakeResponse.Json("""{"error":{"code":"subscription_sharing_user_unavailable","message":"later"}}""", (++calls, 503).Item2) : null;
+            var e503 = T.Throws<AiException>(() => Run(() => p.CompleteAsync(req, _ => { }, CancellationToken.None)), "still unavailable");
+            T.Eq(3, calls); // first try + bounded retries, then a clear message
+            T.True(e503.Message.Contains("req_test_"), "request id: " + e503.Message);
+            T.False(e503.NeedsSignIn, "credentials kept");
+            calls = 0;
+            s.Override = q => q.Path == "/v1/responses" ? FakeResponse.Json("""{"error":{"code":"subscription_sharing_usage_limit_exceeded","message":"limit"}}""", (++calls, 429).Item2) : null;
+            T.Eq(AiDefaults.ChatGptUsage, T.Throws<AiException>(() => Run(() => p.CompleteAsync(req, _ => { }, CancellationToken.None)), "limit").HelpUrl);
+            T.Eq("subscription_sharing_usage_limit_exceeded", T.Throws<AiException>(() => Run(() => p.CompleteAsync(req, _ => { }, CancellationToken.None)), "paused").Code);
+            T.Eq(1, calls); // the second request was not sent while paused
+            OpenAiResponsesProvider.ResetPlanPause();
+            s.Override = null;
+        });
+
+        r.Test("C33 Claude: effort / fallbacks only for models that accept them (older picks still work); every page of the model list", () =>
+        {
+            T.True(ClaudeProvider.SupportsEffort("claude-opus-5-5") && ClaudeProvider.SupportsEffort("claude-sonnet-5-5") && ClaudeProvider.SupportsEffort("claude-opus-4-5"), "current models");
+            T.False(ClaudeProvider.SupportsEffort("claude-sonnet-4-5") || ClaudeProvider.SupportsEffort("claude-haiku-4-5") || ClaudeProvider.SupportsEffort("claude-3-7-sonnet-latest"), "400 on these");
+            T.True(ClaudeProvider.SupportsFallbacks("claude-opus-5-5") && ClaudeProvider.SupportsFallbacks("claude-fable-5-2") && ClaudeProvider.SupportsFallbacks("claude-sonnet-5-5"), "fallback models");
+            T.False(ClaudeProvider.SupportsFallbacks("claude-haiku-4-5") || ClaudeProvider.SupportsFallbacks("claude-opus-4-8"), "no fallback");
+            SecretStore.Write(SecretNames.ClaudeKey, "sk-ant-test");
+            var p = AiService.Create(new AiSettings { Provider = AiProviderKind.ClaudeKey })!;
+            T.Eq("Chào bạn từ Claude.", Run(() => p.CompleteAsync(new AiRequest("", [new AiMessage(AiRole.User, "x")], "claude-haiku-4-5"), _ => { }, CancellationToken.None)));
+            var req = s.Last("/v1/messages")!;
+            T.False(req.Json!.AsObject().ContainsKey("output_config") || req.Json!.AsObject().ContainsKey("fallbacks"), "no effort / fallbacks: " + req.Body);
+            T.False(req.Headers.GetValueOrDefault("anthropic-beta", "").Contains("server-side-fallback"), "no fallback beta");
+            s.Override = q =>
+            {
+                if (q.Path != "/v1/models") return null;
+                return q.Query.Contains("after_id")
+                    ? FakeResponse.Json("""{"data":[{"type":"model","id":"claude-haiku-4-5","display_name":"Claude Haiku 4.5","created_at":"2025-10-01T00:00:00Z"}],"has_more":false,"first_id":"claude-haiku-4-5","last_id":"claude-haiku-4-5"}""")
+                    : FakeResponse.Json("""{"data":[{"type":"model","id":"claude-opus-5-5","display_name":"Claude Opus 5.5","created_at":"2026-01-01T00:00:00Z"}],"has_more":true,"first_id":"claude-opus-5-5","last_id":"claude-opus-5-5"}""");
+            };
+            var models = Run(() => p.ListModelsAsync(CancellationToken.None));
+            T.True(models.Any(m => m.Id == "claude-opus-5-5") && models.Any(m => m.Id == "claude-haiku-4-5"), "both pages: " + string.Join(",", models.Select(m => m.Id)));
+            s.Override = null;
+            SecretStore.Write(SecretNames.ClaudeKey, null);
+        });
+
+        r.Test("C34 MCP dual-era: server/discover, per-request protocol version (2026-07-28), unsupported version error, legacy initialize unchanged", () =>
+        {
+            static JsonObject Meta(string version, string client = "claude-desktop") => new()
+            {
+                ["io.modelcontextprotocol/protocolVersion"] = version,
+                ["io.modelcontextprotocol/clientInfo"] = new JsonObject { ["name"] = client, ["version"] = "9.9" },
+                ["io.modelcontextprotocol/clientCapabilities"] = new JsonObject(),
+            };
+            ClaudeDesktop.ClearHandshake();
+            var m = new McpServer(TextReader.Null, TextWriter.Null, _ => false);
+            var d = Run(() => m.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = "discover-1", ["method"] = "server/discover", ["params"] = new JsonObject { ["_meta"] = Meta("2026-07-28") } }, CancellationToken.None))!["result"]!;
+            T.Eq("complete", d["resultType"]!.GetValue<string>());
+            var sv = d["supportedVersions"]!.AsArray().Select(v => v!.GetValue<string>()).ToList();
+            T.True(sv.Contains("2026-07-28") && sv.Contains("2025-11-25"), string.Join(",", sv));
+            T.Eq("microads-office", d["_meta"]!["io.modelcontextprotocol/serverInfo"]!["name"]!.GetValue<string>());
+            T.True(d["capabilities"]!["tools"] != null, "tools capability");
+            T.Eq("claude-desktop", ClaudeDesktop.LastHandshake()?.Client); // shown as "Đang hoạt động" in settings
+            var tl = Run(() => m.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 2, ["method"] = "tools/list", ["params"] = new JsonObject { ["_meta"] = Meta("2026-07-28") } }, CancellationToken.None))!["result"]!;
+            T.Eq("complete", tl["resultType"]!.GetValue<string>());
+            T.True(tl["tools"]!.AsArray().Count >= 8, "tools");
+            var call = Run(() => m.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 3, ["method"] = "tools/call", ["params"] = new JsonObject { ["name"] = "list_open_apps", ["arguments"] = new JsonObject(), ["_meta"] = Meta("2026-07-28") } }, CancellationToken.None))!["result"]!;
+            T.Eq("complete", call["resultType"]!.GetValue<string>());
+            T.True(call["content"]![0]!["text"]!.GetValue<string>().Contains("word"), "tool ran");
+            var bad = Run(() => m.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 4, ["method"] = "tools/list", ["params"] = new JsonObject { ["_meta"] = Meta("2099-01-01") } }, CancellationToken.None))!["error"]!;
+            T.Eq(-32022, bad["code"]!.GetValue<int>());
+            T.Eq("2099-01-01", bad["data"]!["requested"]!.GetValue<string>());
+            T.True(bad["data"]!["supported"]!.AsArray().Any(v => v!.GetValue<string>() == "2026-07-28"), "supported listed");
+            // legacy clients: initialize, and results without resultType
+            var legacy = new McpServer(TextReader.Null, TextWriter.Null, _ => false);
+            T.Eq("2025-11-25", Run(() => legacy.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "initialize", ["params"] = new JsonObject { ["protocolVersion"] = "2025-11-25", ["clientInfo"] = new JsonObject { ["name"] = "claude-ai", ["version"] = "1" } } }, CancellationToken.None))!["result"]!["protocolVersion"]!.GetValue<string>());
+            T.False(Run(() => legacy.HandleAsync(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 2, ["method"] = "tools/list" }, CancellationToken.None))!["result"]!.AsObject().ContainsKey("resultType"), "legacy result unchanged");
+            ClaudeDesktop.ClearHandshake();
+        });
+
+        r.Test("C35 a first sign-in whose code exchange fails keeps the issued client id; the retry authorizes with it (no second registration)", () =>
+        {
+            ChatGptAuth.Forget();
+            Browser(s);
+            s.Override = q => q.Path == "/api/accounts/oauth/token" && q.Form.GetValueOrDefault("grant_type") == "authorization_code" ? FakeResponse.Json("""{"error":"invalid_grant","error_description":"code expired"}""", 400) : null;
+            T.Throws<AiException>(() => Run(() => ChatGptAuth.SignInAsync(false, null, CancellationToken.None)), "exchange fails");
+            s.Override = null;
+            var kept = ChatGptAuth.Load();
+            T.Eq("oaiapp_test123", kept?.ClientId);
+            T.False(ChatGptAuth.IsSignedIn, "no tokens stored");
+            Browser(s);
+            var c = Run(() => ChatGptAuth.SignInAsync(false, null, CancellationToken.None));
+            T.Eq("oaiapp_test123", _lastAuthorize["client_id"]); // reused, not dynamic_agent_client
+            T.False(_lastAuthorize.ContainsKey("agent_name_hint"), "no new registration");
+            T.True(c.SignedIn && c.Email == "nhanvien@example.com", "signed in");
+            Run(() => ChatGptAuth.SignOutAsync(CancellationToken.None));
+            ChatGptAuth.Forget();
+        });
+
+        r.Test("C36 cancelling a sign-in that waits for the browser ends it at once and closes the callback port", () =>
+        {
+            string? opened = null;
+            ChatGptAuth.OpenBrowser = url => { opened = url; return true; };
+            using var cts = new CancellationTokenSource();
+            var task = Task.Run(() => ChatGptAuth.SignInAsync(true, null, cts.Token));
+            var until = DateTime.Now.AddSeconds(5);
+            while (opened == null && DateTime.Now < until) Thread.Sleep(20);
+            T.True(opened != null, "browser opened");
+            Thread.Sleep(200);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            cts.Cancel();
+            bool ended = ((IAsyncResult)task).AsyncWaitHandle.WaitOne(3000);
+            T.True(ended, "sign-in ended after cancel (" + sw.ElapsedMilliseconds + " ms), status " + task.Status);
+            Console.WriteLine("C36 cancel took " + sw.ElapsedMilliseconds + " ms; before-cancel wait ok");
+            T.True(task.IsCanceled || task.Exception?.InnerException is OperationCanceledException, "cancelled: " + task.Status + " " + task.Exception?.InnerException?.GetType().Name);
+            int port = new Uri(ChatGptAuth.ParseQuery(new Uri(opened!).Query.TrimStart('?'))["redirect_uri"]).Port;
+            using var probe = new System.Net.Sockets.TcpClient();
+            T.Throws<System.Net.Sockets.SocketException>(() => probe.Connect(System.Net.IPAddress.Loopback, port), "port closed");
         });
 
         ChatGptAuth.OpenBrowser = _ => false;

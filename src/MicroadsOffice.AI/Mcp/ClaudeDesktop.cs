@@ -17,8 +17,9 @@ public static class ClaudeDesktop
         : Environment.ProcessPath ?? "MicroadsOffice.exe";
 
     /// <summary>
-    /// The Store (MSIX) edition cannot change Claude Desktop's file: Windows redirects a packaged app's writes under AppData
-    /// into the app's private copy. There the user pastes <see cref="ConfigSnippet"/> in Claude Desktop › Settings › Developer › Edit Config.
+    /// The Store (MSIX) edition does not change Claude Desktop's file: Windows redirects new files a packaged app creates under
+    /// AppData (our temp file + backup) into the app's private copy, so an atomic rewrite would never reach Claude. There the
+    /// user pastes <see cref="ConfigSnippet"/> in Claude Desktop › Settings › Developer › Edit Config (which opens the file Claude reads).
     /// MICROADS_CLAUDE_MANUAL=1 forces this path (tests).
     /// </summary>
     public static bool CanEditConfig => !MicroadsOffice.Core.Office.StorePackage.IsPackaged && Environment.GetEnvironmentVariable("MICROADS_CLAUDE_MANUAL") != "1";

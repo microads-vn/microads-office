@@ -9,6 +9,9 @@ namespace MicroadsOffice.AI.Tests;
 // usage: MicroadsOffice.AI.Tests [core|word|excel] [outDir] [vi|en]
 internal static class Program
 {
+    /// <summary>Sign-in pages the app tried to open in a browser (none is really opened during tests).</summary>
+    public static readonly List<string> BrowserUrls = [];
+
     [STAThread]
     static int Main(string[] args)
     {
@@ -29,6 +32,9 @@ internal static class Program
         Environment.SetEnvironmentVariable("MICROADS_NO_UPDATE", "1");
         Environment.SetEnvironmentVariable("MICROADS_AI_NO_MODALS", "1");
         Loc.Lang = args.Length > 2 && args[2].Length == 2 ? Loc.Normalize(args[2]) : Loc.Vietnamese;
+        // never open the user's real browser (e.g. the setup card's "Continue with ChatGPT" starts a sign-in); tests that
+        // need the browser's part replace this with a fake that calls the loopback callback
+        ChatGptAuth.OpenBrowser = url => { BrowserUrls.Add(url); return false; };
         var r = new Runner();
         // watchdog: a test mode never runs longer than 15 minutes (it takes about one); report and exit instead of hanging
         using var watchdog = new System.Threading.Timer(_ =>

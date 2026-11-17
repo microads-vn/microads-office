@@ -25,6 +25,16 @@ public class OpenAiResponsesProvider : AiProvider
     /// <summary>Renews the credential after a 401 (ChatGPT plan); the request is then retried once.</summary>
     public Func<CancellationToken, Task<string>>? ForceRefresh { get; init; }
 
+    /// <summary>Waits before retrying a 503 (bounded backoff). Tests shorten it.</summary>
+    public static int[] RetryDelaysMs = [1000, 3000];
+    static DateTime PlanPausedUntil; static AiException? PlanPause;
+    /// <summary>Forgets a usage-limit pause (after the user changed the limit / for tests).</summary>
+    public static void ResetPlanPause() { PlanPausedUntil = default; PlanPause = null; }
+
+    /// <summary>OpenAI's request id, kept in error messages so a failure can be diagnosed.</summary>
+    static string? RequestId(HttpResponseMessage r) =>
+        r.Headers.TryGetValues("x-request-id", out var v) ? v.FirstOrDefault() : r.Headers.TryGetValues("openai-request-id", out var v2) ? v2.FirstOrDefault() : null;
+
     public static string BuildBody(AiRequest req)
     {
         var input = new JsonArray();
@@ -55,15 +65,29 @@ public class OpenAiResponsesProvider : AiProvider
             try { return await http.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, ct); }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { throw new AiException(Network(e), inner: e); }
         }
+        // OpenAI: after usage_limit_exceeded, pause new plan-billed requests instead of hammering the limit
+        if (_plan && PlanPausedUntil > DateTime.UtcNow && PlanPause != null) throw PlanPause;
         var resp = await Send(token);
         if ((int)resp.StatusCode == 401 && ForceRefresh != null)
         {
             resp.Dispose();
             resp = await Send(await ForceRefresh(ct));
         }
+        // 503 = temporarily unavailable (routing / usage check / workspace info): keep the credentials, bounded backoff
+        for (int attempt = 0; (int)resp.StatusCode == 503 && attempt < RetryDelaysMs.Length; attempt++)
+        {
+            resp.Dispose();
+            await Task.Delay(RetryDelaysMs[attempt], ct);
+            resp = await Send(_plan ? await _token(ct) : token);
+        }
         using (resp)
         {
-            if (!resp.IsSuccessStatusCode) throw MapError((int)resp.StatusCode, await resp.Content.ReadAsStringAsync(ct), _plan);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var e = MapError((int)resp.StatusCode, await resp.Content.ReadAsStringAsync(ct), _plan, RequestId(resp));
+                if (_plan && e.Code == "subscription_sharing_usage_limit_exceeded") { PlanPause = e; PlanPausedUntil = DateTime.UtcNow.AddMinutes(1); }
+                throw e;
+            }
             var sb = new StringBuilder();
             bool completed = false;
             await using var stream = await resp.Content.ReadAsStreamAsync(ct);
@@ -114,7 +138,7 @@ public class OpenAiResponsesProvider : AiProvider
         using (resp)
         {
             var text = await resp.Content.ReadAsStringAsync(ct);
-            if (!resp.IsSuccessStatusCode) throw MapError((int)resp.StatusCode, text, _plan);
+            if (!resp.IsSuccessStatusCode) throw MapError((int)resp.StatusCode, text, _plan, RequestId(resp));
             return ParseModels(text, _plan);
         }
     }
@@ -128,7 +152,7 @@ public class OpenAiResponsesProvider : AiProvider
         {
             foreach (var m in models)
             {
-                if ((m?["visibility"]?.GetValue<string>() ?? "list") != "list") continue;
+                if (m?["visibility"]?.GetValue<string>() != "list") continue; // OpenAI: keep only entries whose visibility is "list"
                 var slug = m?["slug"]?.GetValue<string>(); if (string.IsNullOrEmpty(slug)) continue;
                 list.Add(new AiModel(slug, m?["display_name"]?.GetValue<string>() ?? slug));
             }
@@ -161,39 +185,47 @@ public class OpenAiResponsesProvider : AiProvider
     }
 
     /// <summary>Maps an HTTP error body ({"error":{code,message}} or {"detail":"..."}) to a user-facing exception.</summary>
-    public static AiException MapError(int status, string body, bool plan)
+    public static AiException MapError(int status, string body, bool plan, string? requestId = null)
     {
-        string? code = null, message = null;
+        string? code = null, message = null, param = null;
         try
         {
             var j = JsonNode.Parse(body);
             code = j?["error"]?["code"]?.GetValue<string>() ?? j?["error"]?["type"]?.GetValue<string>();
             message = j?["error"]?["message"]?.GetValue<string>() ?? j?["detail"]?.ToString();
+            param = j?["error"]?["param"]?.ToString();
         }
         catch { message = body.Length > 300 ? body[..300] : body; }
-        return MapCode(code, message, status, plan);
+        return MapCode(code, message, status, plan, requestId, param);
     }
 
-    public static AiException MapCode(string? code, string? message, int status, bool plan)
+    public static AiException MapCode(string? code, string? message, int status, bool plan, string? requestId = null, string? param = null)
     {
-        string detail = string.IsNullOrWhiteSpace(message) ? "" : " (" + message + ")";
+        string detail = (string.IsNullOrWhiteSpace(message) ? "" : " (" + message + ")") + (string.IsNullOrEmpty(requestId) ? "" : Loc.T(" Mã yêu cầu: ", " Request ID: ") + requestId);
         switch (code)
         {
             case "subscription_sharing_user_not_eligible":
                 return new AiException(Loc.T("Tài khoản/không gian làm việc ChatGPT này chưa được dùng gói ChatGPT trong ứng dụng khác (cần ChatGPT Plus hoặc Pro, hoặc quản trị viên đã tắt). Có thể dùng khóa API thay thế.",
-                    "This ChatGPT account or workspace cannot use its ChatGPT plan in other apps (ChatGPT Plus or Pro is required, or an admin disabled it). You can use an API key instead."), code, status);
+                    "This ChatGPT account or workspace cannot use its ChatGPT plan in other apps (ChatGPT Plus or Pro is required, or an admin disabled it). You can use an API key instead.") + detail, code, status);
             case "subscription_sharing_usage_limit_exceeded":
                 return new AiException(Loc.T("Đã hết hạn mức dùng gói ChatGPT cho Microads Office. Xem và chỉnh hạn mức trong ChatGPT › Settings › Usage.",
-                    "The ChatGPT plan usage limit for Microads Office has been reached. Review and adjust it in ChatGPT › Settings › Usage."), code, status) { HelpUrl = AiDefaults.ChatGptUsage };
+                    "The ChatGPT plan usage limit for Microads Office has been reached. Review and adjust it in ChatGPT › Settings › Usage.") + detail, code, status) { HelpUrl = AiDefaults.ChatGptUsage };
             case "subscription_sharing_usage_unavailable":
             case "subscription_sharing_user_unavailable":
-                return new AiException(Loc.T("ChatGPT tạm thời không kiểm tra được hạn mức. Thử lại sau ít phút.", "ChatGPT could not check usage right now. Try again in a few minutes."), code, status);
+                return new AiException(Loc.T("ChatGPT tạm thời không kiểm tra được hạn mức. Thử lại sau ít phút.", "ChatGPT could not check usage right now. Try again in a few minutes.") + detail, code, status);
             case "subscription_sharing_unsupported_capability":
-                return new AiException(Loc.T("Mô hình hoặc tính năng này không dùng được với gói ChatGPT. Chọn mô hình khác trong Cài đặt › Trợ lý AI.", "This model or feature is not available with the ChatGPT plan. Choose another model in Settings › AI assistant.") + detail, code, status);
+                return new AiException(Loc.T("Mô hình hoặc tính năng này không dùng được với gói ChatGPT", "This model or feature is not available with the ChatGPT plan")
+                    + (string.IsNullOrEmpty(param) ? "" : " [" + param + "]") + Loc.T(". Chọn mô hình khác trong Cài đặt › Trợ lý AI.", ". Choose another model in Settings › AI assistant.") + detail, code, status);
+            case "subscription_sharing_route_not_supported":
+                return new AiException(Loc.T("ChatGPT không cho phép thao tác này với gói ChatGPT. Hãy báo lỗi cho Microads (nút Báo cáo) kèm mã yêu cầu.", "ChatGPT does not allow this operation with the ChatGPT plan. Please report it to Microads (Report button) with the request ID.") + detail, code, status);
+            // OpenAI: the subscriber context could not be validated — a forced refresh already succeeded, so the sign-in itself is
+            // fine; ask to sign in again only after a confirmed revocation / terminal refresh error (those come from ChatGptAuth)
             case "subscription_sharing_invalid_user":
+                return new AiException(Loc.T("ChatGPT chưa xác thực được phiên dùng gói lúc này. Thử lại sau ít phút; nếu vẫn lỗi, mở Cài đặt › Trợ lý AI, Đăng xuất rồi Continue with ChatGPT.", "ChatGPT could not validate the plan session right now. Try again in a few minutes; if it persists, open Settings › AI assistant, sign out and Continue with ChatGPT.") + detail, code, status);
+            // configuration of the grant, not the user's session: signing in again or retrying does not help
             case "chatpass_v2_scope_not_authorized":
             case "chatpass_v2_invalid_authorization_context":
-                return new AiException(Loc.T("Phiên đăng nhập ChatGPT không còn hợp lệ. Hãy đăng nhập lại (Continue with ChatGPT).", "The ChatGPT sign-in is no longer valid. Please sign in again (Continue with ChatGPT).") + detail, code, status) { NeedsSignIn = true };
+                return new AiException(Loc.T("Quyền đã cấp cho Microads Office không cho phép thao tác này (lỗi cấu hình phía ứng dụng). Hãy báo lỗi cho Microads (nút Báo cáo) kèm mã yêu cầu; trong lúc chờ có thể dùng khóa API.", "The permission granted to Microads Office does not allow this operation (an app configuration problem). Please report it to Microads (Report button) with the request ID; meanwhile you can use an API key.") + detail, code, status);
             case "invalid_api_key":
                 return new AiException(Loc.T("Khóa API không đúng hoặc đã bị thu hồi.", "The API key is wrong or was revoked."), code, status) { NeedsSignIn = true };
             case "insufficient_quota":

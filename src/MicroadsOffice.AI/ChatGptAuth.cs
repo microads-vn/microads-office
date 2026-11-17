@@ -179,18 +179,28 @@ public static class ChatGptAuth
             throw new AiException(Loc.T("ChatGPT trả về ứng dụng khác với tài khoản đã chọn. Hãy chọn \"Dùng tài khoản ChatGPT khác\".", "ChatGPT returned a different app registration. Choose \"Use another ChatGPT account\"."), "client_mismatch");
 
         status?.Invoke(Loc.T("Đang xác minh tài khoản…", "Verifying the account…"));
-        var tokens = await PostFormAsync(TokenUrl, new()
+        JsonNode tokens; string idToken; JsonNode claims;
+        try
         {
-            ["grant_type"] = "authorization_code",
-            ["client_id"] = clientId,
-            ["code"] = code,
-            ["code_verifier"] = verifier,
-            ["redirect_uri"] = redirect,
-            ["resource"] = Resource,
-        }, ct);
-
-        var idToken = tokens["id_token"]?.GetValue<string>() ?? throw new AiException(Loc.T("ChatGPT không trả về ID token.", "ChatGPT returned no ID token."), "no_id_token");
-        var claims = await ValidateIdTokenAsync(idToken, clientId, nonce, ct);
+            tokens = await PostFormAsync(TokenUrl, new()
+            {
+                ["grant_type"] = "authorization_code",
+                ["client_id"] = clientId,
+                ["code"] = code,
+                ["code_verifier"] = verifier,
+                ["redirect_uri"] = redirect,
+                ["resource"] = Resource,
+            }, ct);
+            idToken = tokens["id_token"]?.GetValue<string>() ?? throw new AiException(Loc.T("ChatGPT không trả về ID token.", "ChatGPT returned no ID token."), "no_id_token");
+            claims = await ValidateIdTokenAsync(idToken, clientId, nonce, ct);
+        }
+        catch when (!reuse)
+        {
+            // OpenAI: a new registration's issued client id is kept, and the next attempt authorizes again with it
+            // (instead of registering once more through dynamic_agent_client). No tokens are stored.
+            Save(new ChatGptCredential { Issuer = Issuer, ClientId = clientId, ExtAgentHostId = hostId, SavedAt = DateTimeOffset.UtcNow });
+            throw;
+        }
         var sub = claims["sub"]?.GetValue<string>() ?? "";
         if (reuse && !string.IsNullOrEmpty(previous!.Subject) && previous.Subject != sub)
             throw new AiException(Loc.T("Bạn đã đăng nhập một tài khoản ChatGPT khác với tài khoản đã lưu. Hãy chọn \"Dùng tài khoản ChatGPT khác\".", "You signed in with a different ChatGPT account than the saved one. Choose \"Use another ChatGPT account\"."), "account_mismatch");

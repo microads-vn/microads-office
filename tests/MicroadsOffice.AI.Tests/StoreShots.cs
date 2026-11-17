@@ -61,7 +61,7 @@ public static class StoreShots
         var closer = Ui.StartCloser();
         var ai = new ScriptedProvider { DelayMs = 1 };
         AiService.Override = _ => ai;
-        AiSettings.Update(x => { x.Provider = AiProviderKind.ChatGpt; x.ChatGptModel = "gpt-6.1"; });
+        AiSettings.Update(x => { x.Provider = AiProviderKind.ChatGpt; x.ChatGptModel = ""; /* no invented model name in a Store screenshot */ });
         WordMainForm? w = null;
         try
         {
@@ -203,8 +203,12 @@ public static class StoreShots
             g.DrawImage(art, (w - icon) / 2, top, icon, icon);
             if (h > w)
             {
-                using var font = new Font("Segoe UI Semibold", w / 11f);
-                using var sub = new Font("Segoe UI", w / 24f);
+                // pixel sizes, shrunk until the name fits 90% of the width (a point size overflowed: "Microads Off")
+                float size = w / 9f;
+                Font font = new("Segoe UI Semibold", size, GraphicsUnit.Pixel);
+                while (g.MeasureString("Microads Office", font).Width > w * 0.9f && size > 8) { font.Dispose(); size -= 2; font = new Font("Segoe UI Semibold", size, GraphicsUnit.Pixel); }
+                using var _font = font;
+                using var sub = new Font("Segoe UI", size * 0.45f, GraphicsUnit.Pixel);
                 var fmt = new StringFormat { Alignment = StringAlignment.Center };
                 g.DrawString("Microads Office", font, Brushes.Black, new RectangleF(0, top + icon + h * 0.05f, w, h * 0.12f), fmt);
                 g.DrawString("Word · Excel · PDF · AI", sub, Brushes.DimGray, new RectangleF(0, top + icon + h * 0.16f, w, h * 0.08f), fmt);

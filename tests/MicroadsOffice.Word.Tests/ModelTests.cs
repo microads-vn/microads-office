@@ -122,6 +122,36 @@ public static class ModelTests
             T.Eq(new DocPos(1, 4), end);
         });
 
+        r.Test("M08b pasting paragraph + table + paragraphs keeps the paragraphs after the table (not inside its first cell)", () =>
+        {
+            Paragraph P(string s) => new(s);
+            var t = Table.Create(2, 2, 400, CharProps.Default);
+            t.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Nội dung", CharProps.Default));
+            t.Rows[1].Cells[1].Paragraphs[0].Runs.Add(new Run("……", CharProps.Default));
+            var blocks = new List<Block> { P("Điều 1"), t, P("Điều 2"), P("Nội dung điều 2") };
+            // into an empty document
+            var d = Document.CreateBlank();
+            var end = Editing.PasteBlocks(d, new DocPos(0, 0), blocks);
+            T.Eq(4, d.Blocks.Count, "paragraph, table, two paragraphs");
+            T.True(d.Blocks[0] is Paragraph { Text: "Điều 1" } && d.Blocks[1] is Table && d.Blocks[2] is Paragraph { Text: "Điều 2" } && d.Blocks[3] is Paragraph { Text: "Nội dung điều 2" }, "order");
+            var pasted = (Table)d.Blocks[1];
+            T.Eq("Nội dung", pasted.Rows[0].Cells[0].Paragraphs.Single().Text);
+            T.Eq(d.IndexOf((Paragraph)d.Blocks[3]), end.Para);
+            // into the middle of an existing paragraph: the text after the caret stays after everything pasted
+            var d2 = Sample(1);
+            var before = d2.Paragraphs[0].Text;
+            Editing.PasteBlocks(d2, new DocPos(0, 5), blocks);
+            var body = d2.Blocks.ToList();
+            int ti = body.FindIndex(b => b is Table);
+            T.True(ti > 0 && body[ti + 1] is Paragraph { Text: "Điều 2" }, "paragraph after table");
+            T.True(body.OfType<Paragraph>().Last().Text.EndsWith(before[5..]), "tail kept at the end");
+            T.False(((Table)body[ti]).Rows.SelectMany(r => r.Cells).SelectMany(c => c.Paragraphs).Any(p => p.Text.Contains("Điều 2")), "nothing pasted into the table");
+            // a table as the LAST block gets an empty paragraph after it (the caret goes there)
+            var d3 = Document.CreateBlank();
+            var end3 = Editing.PasteBlocks(d3, new DocPos(0, 0), [P("Tiêu đề"), t]);
+            T.True(d3.Blocks[^1] is Paragraph { Length: 0 } && d3.Paragraphs[end3.Para].Cell == null, "caret after the table");
+        });
+
         r.Test("M09 layout: wrapping stays inside margins, justify fills the line", () =>
         {
             var d = Sample(1);

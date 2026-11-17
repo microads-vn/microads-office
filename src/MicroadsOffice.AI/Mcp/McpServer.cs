@@ -12,7 +12,12 @@ namespace MicroadsOffice.AI.Mcp;
 /// </summary>
 public sealed class McpServer
 {
+    /// <summary>Legacy revisions (session opened by "initialize").</summary>
     static readonly string[] Versions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+    /// <summary>Modern revisions (2026-07-28+): no handshake, every request carries its version in params._meta.</summary>
+    static readonly string[] ModernVersions = ["2026-07-28"];
+    const string MetaVersion = "io.modelcontextprotocol/protocolVersion", MetaClient = "io.modelcontextprotocol/clientInfo", MetaServer = "io.modelcontextprotocol/serverInfo";
+    bool _modernSeen;
     readonly TextReader _in; readonly TextWriter _out;
     readonly Func<AppKind, bool> _launch;
 
@@ -54,8 +59,33 @@ public sealed class McpServer
         bool notification = id == null;
         try
         {
+            // dual-era (MCP 2026-07-28 "Versioning and Compatibility"): a request with per-request _meta is served by the modern
+            // rules, "initialize" opens a legacy session; both are answered by the same process
+            var meta = (msg["params"] as JsonObject)?["_meta"] as JsonObject;
+            string? modern = meta?[MetaVersion] is JsonValue mv && mv.TryGetValue<string>(out var mvs) ? mvs : null;
+            if (modern != null && !ModernVersions.Contains(modern))
+            {
+                if (notification) return null;
+                return new JsonObject
+                {
+                    ["jsonrpc"] = "2.0", ["id"] = id,
+                    ["error"] = new JsonObject
+                    {
+                        ["code"] = -32022, ["message"] = "Unsupported protocol version",
+                        ["data"] = new JsonObject { ["supported"] = new JsonArray([.. ModernVersions.Concat(Versions).Select(v => (JsonNode)v)]), ["requested"] = modern },
+                    },
+                };
+            }
+            if (modern != null && !_modernSeen)
+            {
+                // a modern client has no "initialize": its first request proves that Claude Desktop started us
+                _modernSeen = true;
+                var ci = meta?[MetaClient];
+                ClaudeDesktop.RecordHandshake(ci?["name"]?.GetValue<string>() ?? "", ci?["version"]?.GetValue<string>() ?? "");
+            }
             JsonNode result = method switch
             {
+                "server/discover" => Discover(),
                 "initialize" => Initialize(msg["params"] as JsonObject),
                 "ping" => new JsonObject(),
                 "tools/list" => new JsonObject { ["tools"] = Tools() },
@@ -65,6 +95,7 @@ public sealed class McpServer
                 _ when method.StartsWith("notifications/") => new JsonObject(),
                 _ => throw new McpError(-32601, "Method not found: " + method),
             };
+            if ((modern != null || method == "server/discover") && result is JsonObject ro && !ro.ContainsKey("resultType")) ro["resultType"] = "complete";
             return notification ? null : new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result };
         }
         catch (McpError e) { return notification ? null : Error(id, e.Code, e.Message); }
@@ -80,6 +111,19 @@ public sealed class McpServer
 
     sealed class McpError(int code, string message) : Exception(message) { public int Code { get; } = code; }
 
+    const string Instructions = "Microads Office is a free office suite (Word, Excel, PDF). Use these tools to read and edit the document the user has open in Microads Word / Excel / PDF. " +
+                                "Call list_open_apps first. Before editing call get_editing_guide for the app to learn the content format. Edits are applied as one undo step each; tell the user they can press Ctrl+Z in Microads Office.";
+
+    /// <summary>server/discover (MCP 2026-07-28): supported versions, capabilities and identity in one answer.</summary>
+    static JsonObject Discover() => new()
+    {
+        ["resultType"] = "complete",
+        ["supportedVersions"] = new JsonArray([.. ModernVersions.Concat(Versions).Select(v => (JsonNode)v)]),
+        ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
+        ["_meta"] = new JsonObject { [MetaServer] = new JsonObject { ["name"] = ClaudeDesktop.ServerName, ["title"] = "Microads Office", ["version"] = Product.VersionText } },
+        ["instructions"] = Instructions,
+    };
+
     static JsonObject Initialize(JsonObject? p)
     {
         ClaudeDesktop.RecordHandshake(p?["clientInfo"]?["name"]?.GetValue<string>() ?? "", p?["clientInfo"]?["version"]?.GetValue<string>() ?? "");
@@ -90,8 +134,7 @@ public sealed class McpServer
             ["protocolVersion"] = version,
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
             ["serverInfo"] = new JsonObject { ["name"] = ClaudeDesktop.ServerName, ["title"] = "Microads Office", ["version"] = Product.VersionText },
-            ["instructions"] = "Microads Office is a free office suite (Word, Excel, PDF). Use these tools to read and edit the document the user has open in Microads Word / Excel / PDF. " +
-                               "Call list_open_apps first. Before editing call get_editing_guide for the app to learn the content format. Edits are applied as one undo step each; tell the user they can press Ctrl+Z in Microads Office.",
+            ["instructions"] = Instructions,
         };
     }
 

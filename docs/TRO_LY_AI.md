@@ -94,3 +94,48 @@ Chạy: `build.ps1` (core/word/excel/pdf), GitHub Actions (như trên), `.build\
 - Chưa làm: build phát hành một lần có `-Store` (MSIX định danh MicroadsTech.MicroadsOffice), thử bản Store trên máy,
   ảnh chụp Store (chế độ `shots-word` / `shots-excel`), nộp hồ sơ theo `docs/MICROSOFT_STORE.md`.
 - Cần người dùng xác nhận: kết nối Claude Desktop thật (trạng thái "Đang hoạt động"), đăng nhập ChatGPT thật.
+
+## 9. Rà soát lại luồng đăng nhập ChatGPT / Claude (17/11/2026, không cần người dùng thử)
+
+Cách làm: (a) một tác tử độc lập đối chiếu mã với tài liệu chính thức hiện hành (OpenAI Sign in with ChatGPT, Anthropic, MCP,
+Microsoft MSIX); (b) tự đọc lại mã giao diện theo từng vai trò; (c) kiểm tra với **máy chủ thật** ở các bước không cần mật khẩu;
+(d) kiểm tra (chỉ đọc) cấu hình Claude Desktop thật trên máy.
+
+**Kiểm tra với máy chủ thật (không cần đăng nhập):**
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `auth.openai.com/.well-known/openid-configuration` | issuer, authorize, token, jwks, revoke, PKCE S256 **khớp đúng** mã |
+| URL đăng nhập do ứng dụng tạo (dynamic_agent_client, 127.0.0.1:1455/auth/callback, scope có `chatgpt.tokens.use.direct`, resource, ext_agent_host_id, agent_name_hint) | OpenAI **chấp nhận** → chuyển tới trang đăng nhập; đối chứng client sai → 400 `invalid_authorize_client` |
+| Cổng dự phòng (khi 1455 bận) | OpenAI chấp nhận |
+| Anthropic `/v1/models` với khóa giả, header như SDK (Bearer, API 2026-10-21) | 401 `authentication_error` → ứng dụng báo "Khóa API Claude không đúng" |
+| Claude Desktop thật (bản Store 5.x) | đọc cấu hình ở `%LOCALAPPDATA%\Claude-Data\claude_pzs8sxrjxfjjc` (đúng thư mục ứng dụng tìm); tệp chưa có mục `microads-office` vì lần mở cuối (06:38) là bản cũ — bản mới tự ghi khi mở Word/Excel/PDF (C26, C30) |
+
+**Lỗi/thiếu sót tìm thấy và đã sửa (mỗi mục có kiểm thử):**
+
+| # | Vấn đề | Sửa | Kiểm thử |
+|---|---|---|---|
+| R1 | Test W02 bấm "Continue with ChatGPT" trên thẻ thiết lập có thể mở **trình duyệt thật** của người dùng | Bộ test chặn mở trình duyệt ở mọi chế độ | Program.cs |
+| R2 | Hộp thoại bị đóng trước sự kiện Shown vẫn bắt đầu đăng nhập ngầm (giữ cổng 1455 tới 10 phút) | Không bắt đầu khi hộp thoại đã đóng | W02, W20 |
+| R3 | Đang chờ trình duyệt (tới 10 phút) không có nút hủy | Nút **"Hủy đăng nhập"**; nhả cổng ngay | W20, C36 |
+| R4 | Lưu "khóa API Claude/OpenAI" khi chưa nhập khóa → trợ lý im lặng "chưa kết nối" | Cảnh báo, không đóng hộp thoại | W21 |
+| R5 | Đã kết nối Claude Desktop nhưng khung trợ lý chỉ ghi "Chưa kết nối AI" | Thẻ và dòng trạng thái nói rõ "hãy hỏi trong Claude Desktop" | W22 |
+| R6 | Bản Store: trạng thái nói "Đã ghi cấu hình" trong khi người dùng phải tự dán | Câu hướng dẫn riêng cho bản Store | W22 |
+| R7 | Bấm "Continue with ChatGPT" trên thẻ thiết lập nhưng hộp thoại vẫn chọn cách cũ | Tự chọn ChatGPT | — |
+| R8 | Lỗi `chatpass_v2_*` (cấu hình quyền) và `subscription_sharing_invalid_user` bắt đăng nhập lại — OpenAI nói không nên | Thông báo đúng, không bắt đăng nhập lại; kèm **mã yêu cầu** để chẩn đoán | C32 |
+| R9 | 503 (tạm không khả dụng) không tự thử lại; hết hạn mức vẫn tiếp tục gửi | Thử lại có giới hạn (1 s, 3 s); tạm dừng 1 phút sau `usage_limit_exceeded`; hiện `error.param`; xử lý `route_not_supported` | C32 |
+| R10 | Danh sách mô hình gói ChatGPT nhận cả mục không có `visibility` | Chỉ nhận `visibility = "list"` | C32 |
+| R11 | Lần đăng ký đầu lỗi ở bước đổi mã → mất client id đã cấp, lần sau đăng ký lại | Giữ client id, lần sau dùng lại | C35 |
+| R12 | Claude: `effort` gửi cho mọi mô hình → lỗi 400 khi chọn Sonnet 4.5 / Haiku 4.5; danh sách mô hình chỉ đọc trang đầu | Chỉ gửi effort/fallback cho mô hình hỗ trợ; đọc mọi trang | C33 |
+| R13 | Máy chủ MCP chỉ hiểu giao thức cũ (`initialize`); MCP 2026-07-28 bắt buộc `server/discover` | Hỗ trợ cả hai thế hệ: `server/discover`, phiên bản theo từng yêu cầu, lỗi −32022, ghi "bắt tay" cả với client mới | C34 |
+| R14 | Sau `await`, mã giao diện có lúc chạy trên luồng nền (khi thiếu SynchronizationContext) → nút "Hủy đăng nhập" treo hộp thoại | `UiThread.On`: phần sau mọi `await` trong khung/hộp thoại AI luôn quay về luồng giao diện qua `BeginInvoke` | W20 (có ghi vết luồng) |
+| R15 | (Phát hiện khi xem ảnh Store) Dán/ghi nội dung có **bảng ở giữa**: các đoạn sau bảng bị nhét vào ô đầu của bảng — lỗi chung của Word (cả copy/paste), không riêng Trợ lý | `Editing.PasteBlocks` tiếp tục dán **sau** bảng | Word M08b, AI W23 |
+| R16 | (Phát hiện khi xem ảnh Store) Excel "tự vừa cột" đo cột công thức trước khi tính → cột Tổng hiện `####` | Tính lại công thức trước khi đo | AI X09 |
+| R17 | Gói MSIX không tạo được: chú thích trong manifest chứa `--` (XML cấm) | Sửa chú thích; gói `MicroadsOffice_2.0.3.0_x64.msix` tạo được, định danh khớp Partner Center | make_msix.ps1 |
+
+Kết quả sau rà soát (17/11/2026 07:26): **lõi 36/36, Word 22/22, Excel 8/8, PDF 3/3, E2E 4/4** — 73 bài AI (sau R15–R16: thêm W23, X09, Word M08b).
+
+**Bản Store chạy thử trên máy (đăng ký tạm từ ổ E, đã gỡ, ổ C trở về đúng dung lượng ban đầu):** PFN `MicroadsTech.MicroadsOffice_p0kmfkpdegte6`; Claude Desktop gọi `MicroadsOffice.exe --mcp` **qua execution alias** được (giao thức cũ và 2026-07-28); Word bản Store mở được; tiến trình `--mcp` thấy Word qua named pipe và từ chối khi chưa cho phép.
+
+Còn lại (ghi nhận, không sửa): chỉ lưu **một** tài khoản ChatGPT (đổi tài khoản = đăng xuất + thu hồi rồi đăng nhập
+mới — cố ý, đơn giản cho người dùng văn phòng).

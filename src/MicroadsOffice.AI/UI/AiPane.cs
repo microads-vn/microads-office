@@ -153,11 +153,13 @@ public sealed class AiPane : Panel
             _planLine.Text = Loc.T("Đang dùng gói ChatGPT  ·  Quản lý hạn mức", "Using ChatGPT plan  ·  Manage usage");
             _planLine.LinkArea = new LinkArea(_planLine.Text.IndexOf('·') + 3, _planLine.Text.Length - _planLine.Text.IndexOf('·') - 3);
         }
-        if (_setupCard != null && ready) { _chat.Controls.Remove(_setupCard); _setupCard.Dispose(); _setupCard = null; }
+        if (_setupCard != null && ready) { _chat.Controls.Remove(_setupCard); _setupCard.Dispose(); _setupCard = null; _desktopNote = null; }
         if (!ready && _setupCard == null && _chat.Controls.Count == 0) ShowWelcome();
+        if (_desktopNote != null && _desktopNote.Visible != s.AllowClaudeDesktop) { _desktopNote.Visible = s.AllowClaudeDesktop; FitChildren(); }
     }
 
     Control? _setupCard;
+    Label? _desktopNote;
 
     void ShowWelcome()
     {
@@ -187,6 +189,15 @@ public sealed class AiPane : Panel
                          "Choose one. Microads Office charges nothing and keeps no account on Microads servers; content is sent only to the AI service you choose, when you click Send."),
             AutoSize = true, MaximumSize = new Size(Dpi.Scale(320), 0), ForeColor = Theme.SubtleInk, Margin = new Padding(0, Dpi.Scale(4), 0, Dpi.Scale(8)),
         });
+        // Claude Desktop works from Claude's own window: say so, otherwise "not connected" looks like the connection failed
+        _desktopNote = new Label
+        {
+            Name = "lblAiDesktopConnected", AutoSize = true, MaximumSize = new Size(Dpi.Scale(320), 0), ForeColor = Theme.OkGreen,
+            Margin = new Padding(0, 0, 0, Dpi.Scale(8)), Visible = AiSettings.Load().AllowClaudeDesktop,
+            Text = Loc.T("Claude Desktop đã được kết nối: hãy yêu cầu ngay trong cửa sổ Claude Desktop, ví dụ \"Đọc văn bản đang mở trong Microads Word và tóm tắt\". Muốn hỏi ngay trong khung này, chọn thêm một cách bên dưới.",
+                         "Claude Desktop is connected: ask in the Claude Desktop window, e.g. \"Read the document open in Microads Word and summarise it\". To ask right here in this pane, also choose a way below."),
+        };
+        card.Controls.Add(_desktopNote);
         card.Controls.Add(BigButton("btnAiSetupChatGpt", "Continue with ChatGPT", Loc.T("Dùng gói ChatGPT Plus/Pro của bạn", "Use your ChatGPT Plus/Pro plan"), Color.Black, Color.White, (_, _) => OpenSettings(AiSettingsDialog.Section.ChatGpt, autoStart: true)));
         card.Controls.Add(BigButton("btnAiSetupClaude", Loc.T("Dùng Claude", "Use Claude"), Loc.T("Gói Claude Pro/Max (qua Claude Desktop) hoặc khóa API", "Claude Pro/Max plan (via Claude Desktop) or an API key"), Color.FromArgb(217, 119, 87), Color.White, (_, _) => OpenSettings(AiSettingsDialog.Section.Claude)));
         card.Controls.Add(BigButton("btnAiSetupOther", Loc.T("Khóa API OpenAI / máy chủ AI riêng", "OpenAI API key / own AI server"), Loc.T("Kể cả Ollama chạy ngay trên máy (miễn phí)", "Including Ollama on this computer (free)"), Color.White, Theme.Ink, (_, _) => OpenSettings(AiSettingsDialog.Section.Other)));
@@ -239,7 +250,7 @@ public sealed class AiPane : Panel
         if (Busy) _cts?.Cancel();
         _history.Clear();
         foreach (Control c in _chat.Controls.Cast<Control>().ToList()) { _chat.Controls.Remove(c); c.Dispose(); }
-        _setupCard = null;
+        _setupCard = null; _desktopNote = null;
         LastAnswer = null;
         ShowWelcome();
         _input.Focus();
@@ -319,13 +330,13 @@ public sealed class AiPane : Panel
                 var model = s.ModelFor(provider.Kind);
                 if (string.IsNullOrWhiteSpace(model))
                 {
-                    var models = await provider.ListModelsAsync(ct);
+                    var models = await UiThread.On(this, provider.ListModelsAsync(ct));
                     model = provider.DefaultModel(models);
                     if (string.IsNullOrEmpty(model)) throw new AiException(Loc.T("Dịch vụ AI không có mô hình nào dùng được.", "The AI service offers no usable model."));
                     var kind = provider.Kind; var m2 = model;
                     AiSettings.Update(x => x.SetModel(kind, m2));
                 }
-                full = await Task.Run(() => provider.CompleteAsync(new AiRequest(instructions, messages, model), d => { lock (buffer) buffer.Append(d); }, ct), ct);
+                full = await UiThread.On(this, Task.Run(() => provider.CompleteAsync(new AiRequest(instructions, messages, model), d => { lock (buffer) buffer.Append(d); }, ct), ct));
             }
             catch (Exception e) { error = e; }
             uiTimer.Stop(); uiTimer.Dispose();

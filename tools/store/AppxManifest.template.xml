@@ -39,7 +39,7 @@
       </uap:VisualElements>
       <Extensions>
         <!-- "MicroadsOffice.exe" on the user's PATH (%LOCALAPPDATA%\Microsoft\WindowsApps): lets Claude Desktop start the
-             built-in MCP server ("MicroadsOffice.exe --mcp"); files inside WindowsApps cannot be started directly. -->
+             built-in MCP server (MicroadsOffice.exe with the mcp switch; XML comments cannot contain two hyphens); files inside WindowsApps cannot be started directly. -->
         <uap5:Extension Category="windows.appExecutionAlias" Executable="MicroadsOffice.exe" EntryPoint="Windows.FullTrustApplication">
           <uap5:AppExecutionAlias>
             <uap5:ExecutionAlias Alias="MicroadsOffice.exe" />
