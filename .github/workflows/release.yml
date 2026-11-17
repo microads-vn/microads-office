@@ -43,24 +43,28 @@ jobs:
         run: dotnet build MicroadsOffice.sln -c Release
 
       - name: Tests — PDF core
+        timeout-minutes: 15   # a stray window or child process must fail the step, not hang the job for hours
         shell: pwsh
         run: |
           & tests\MicroadsOffice.Tests\bin\Release\net10.0-windows\MicroadsOffice.Tests.exe core "$env:RUNNER_TEMP\pdf-test"
           if ($LASTEXITCODE -ne 0) { throw 'PDF core tests failed' }
 
       - name: Tests — Word
+        timeout-minutes: 30   # a stray window or child process must fail the step, not hang the job for hours
         shell: pwsh
         run: |
           $p = Start-Process tests\MicroadsOffice.Word.Tests\bin\Release\net10.0-windows\MicroadsOffice.Word.Tests.exe -ArgumentList "all `"$env:RUNNER_TEMP\word-test`" vi" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw 'Word tests failed' }
 
       - name: Tests — Excel
+        timeout-minutes: 30   # a stray window or child process must fail the step, not hang the job for hours
         shell: pwsh
         run: |
           $p = Start-Process tests\MicroadsOffice.Excel.Tests\bin\Release\net10.0-windows\MicroadsOffice.Excel.Tests.exe -ArgumentList "all `"$env:RUNNER_TEMP\excel-test`"" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw 'Excel tests failed' }
 
       - name: Tests — AI assistant (local fake server, no real account)
+        timeout-minutes: 30   # a stray window or child process must fail the step, not hang the job for hours
         shell: pwsh
         run: |
           foreach ($m in 'core', 'word', 'excel', 'pdf') {
