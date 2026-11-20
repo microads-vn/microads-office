@@ -53,7 +53,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json"><?= json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?></script>
 <link rel="icon" href="/office/assets/office.png">
-<link rel="stylesheet" href="/office/assets/style.css?v=7">
+<link rel="stylesheet" href="/office/assets/style.css?v=10">
 </head>
 <body class="blog">
 <?php layout_header($LANG, ['vi' => tool_path('vi'), 'en' => tool_path('en')]); ?>

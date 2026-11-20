@@ -93,9 +93,9 @@ try:
     st, hd, body = get('/?lang=vi'); page = body.decode('utf-8')
     check(st == 200 and not php_errors(page), 'download page renders without PHP warnings')
     check('id="dl-main" href="/office/download/MicroadsOffice_Setup.exe"' in page, 'main button → web installer MicroadsOffice_Setup.exe')
-    check(f'id="dl-full" href="/office/download/{full_name}"' in page and f'Bộ cài đầy đủ</a>' not in page and f'Bộ cài đầy đủ {ver}' in page.replace('</a>', ''), f'second button → full installer {ver}')
+    check('id="dl-full"' not in page and 'Bộ cài đầy đủ' not in page, 'only the web installer is offered from microads.vn (no full-installer button)')
     check('luôn cài bản mới nhất' in page and f'<b>{ver}</b>' in page, 'meta line: web installer always installs the latest version')
-    check(sha(stub_bytes) in page and sig['sha256'] in page, 'SHA-256 of both files shown')
+    check(sha(stub_bytes) in page and sig['sha256'] not in page, 'SHA-256 of the web installer shown')
     check('Vẫn chạy' in page and 'Tải tệp đáng ngờ xuống' in page and 'ít được tải xuống' in page and 'không phải phát hiện virus' in page,
           'safe-installation steps use the exact Chrome 157 wording (⋮ → Tải tệp đáng ngờ xuống) and Windows (Vẫn chạy)')
     check('google-site-verification' not in page, 'no Google verification tag until one is set')
@@ -110,9 +110,9 @@ try:
     check('install.ps1' not in page and 'cai-bang-lenh' not in page and 'Cập nhật phần mềm' not in page, 'command-install and software-update boxes removed')
     check('cmd-winget' not in page, 'no winget command on the page')
     g = page.find('<details class="guide" id="cai-dat-an-toan">')
-    check(page.find('id="dl-full"') < g and '<summary>Hướng dẫn cài đặt</summary>' in page and page.find('Vẫn chạy') > g and page.find('id="sha-full"') > g,
+    check(page.find('id="dl-main"') < g and '<summary>Hướng dẫn cài đặt</summary>' in page and page.find('Vẫn chạy') > g and page.find('id="sha-web"') > g,
           'installation guide is a drop-down under the two download buttons (steps and SHA-256 inside)')
-    check('id="dl-main" href="/office/download/MicroadsOffice_Setup.exe" data-warn>' in page and f'id="dl-full" href="/office/download/{full_name}" data-warn>' in page
+    check('id="dl-main" href="/office/download/MicroadsOffice_Setup.exe" data-warn>' in page
           and '<dialog class="warn" id="dl-warn"' in page and 'Chrome chặn tải về' in page and 'màn hình xanh' in page and 'không chứa virus' in page and 'id="dl-warn-go"' in page and 'Tiếp tục tải' in page,
           'both download buttons first show the short warning with a Continue download button')
     check('<button type="button" class="btn big store" id="dl-store" data-wait>' in page and 'id="store-wait"' in page and 'đang chờ Microsoft duyệt' in page
@@ -120,7 +120,7 @@ try:
           'Microsoft Store button explains the review and counts down to 21/11/2026 (Vietnam time)')
     check('id="cac-phien-ban"' in page and '<td class="n"><p>Ghi chú thử nghiệm</p></td>' in page, 'versions table lists the release with its notes')
     st, hd, body = get('/?lang=en'); en = body.decode('utf-8')
-    check('Download Microads Office' in en and 'Continue download' in en and 'Full installer' in en and '<summary>Installation guide</summary>' in en and 'Which button?' in en and not php_errors(en), 'English page translated')
+    check('Download Microads Office' in en and 'Continue download' in en and 'Full installer' not in en and '<summary>Installation guide</summary>' in en and 'Which option?' in en and not php_errors(en), 'English page translated')
     st, hd, css = get('/assets/style.css')
     check(st == 200 and b'.guide-body{' in css and b'.versions thead{display:none}' in css, 'stylesheet has the guide drop-down and phone layout of the versions table')
 
@@ -190,6 +190,18 @@ try:
     check('google-site-verification' not in b.decode(), 'clearing the code removes the tag')
     st, _, b = get('/admin/', op, {'csrf': 'bad', 'action': 'winget', 'wingetId': 'X.Y'}); hp = b.decode()
     check('Phiên làm việc hết hạn' in hp, 'admin: CSRF still enforced')
+    st, _, b = get('/admin/?tab=promo', op); hp = b.decode()
+    st, _, b = get('/admin/', op, {'csrf': csrf(hp), 'action': 'store', 'storeId': 'https://apps.microsoft.com/detail/9PHM0WX16WDR?hl=vi'}); hp = b.decode()
+    st, _, b = get('/?lang=vi'); page = b.decode()
+    sb = page.find('id="dl-store" href="https://apps.microsoft.com/detail/9PHM0WX16WDR"')
+    check(sb > 0 and 'ms-store-badge-vi.svg' in page and sb < page.find('id="dl-main"') and 'Khuyên dùng' in page and 'Đã vượt qua quy trình kiểm duyệt của Microsoft' in page and 'id="store-wait"' not in page,
+          'with a Store ID: the official Microsoft Store badge comes first, the .exe buttons below, no countdown')
+    st, _, b = get('/en/'); en = b.decode()
+    check('ms-store-badge-en.svg' in en and 'Recommended' in en, 'English home shows the English Store badge')
+    st, _, b = get('/blog/ham-xlookup-co-ban'); art = b.decode()
+    check(art.count('ms-store-badge-vi.svg') == 2 and 'hoặc tải trình cài đặt' in art and 'Đã qua kiểm duyệt của Microsoft' in art, 'article download boxes lead with the Microsoft Store badge')
+    st, _, b = get('/admin/?tab=promo', op); hp = b.decode()
+    get('/admin/', op, {'csrf': csrf(hp), 'action': 'store', 'storeId': ''})
     for tab in ('publish', 'releases', 'account', 'seo'):
         st, _, b = get('/admin/?tab=' + tab, op)
         check(st == 200 and not php_errors(b.decode()), f'admin tab {tab} renders')

@@ -77,7 +77,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <?php if (($c['gscVerification'] ?? '') !== ''): ?><meta name="google-site-verification" content="<?= h($c['gscVerification']) ?>">
 <?php endif; ?>
 <link rel="icon" href="/office/assets/office.png">
-<link rel="stylesheet" href="/office/assets/style.css?v=7">
+<link rel="stylesheet" href="/office/assets/style.css?v=10">
 </head>
 <body>
 <?php layout_header($LANG, ['vi' => '/office/?lang=vi', 'en' => '/office/en/']); ?>
@@ -89,21 +89,26 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
       <h1>Microads Office</h1>
       <p class="lead"><?= t('Soạn thảo văn bản, bảng tính và PDF (đọc, ký số, in) trong một bộ cài duy nhất — không giới hạn tính năng, không cần tài khoản.', 'Documents, spreadsheets and PDF (read, sign, print) in a single installer — no hidden limits, no account needed.') ?></p>
       <?php if ($latest): ?>
-        <div class="dl">
+        <?php if ($store): ?>
+        <div class="store-first">
+          <a class="store-badge" id="dl-store" href="<?= h($store['page']) ?>" rel="noopener"><img src="/office/assets/ms-store-badge-<?= $LANG ?>.svg" alt="<?= h(t('Tải xuống từ Microsoft Store', 'Download from the Microsoft Store')) ?>" width="322" height="88"></a>
+          <p class="store-cert"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 3v6c0 5-3.4 9.4-7 11-3.6-1.6-7-6-7-11V5l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><?= t('Đã vượt qua quy trình kiểm duyệt của Microsoft và được phát hành chính thức trên Microsoft Store.', 'Passed Microsoft’s certification process and is officially published on the Microsoft Store.') ?></p>
+          <p class="store-note"><b><?= t('Khuyên dùng', 'Recommended') ?></b> · <?= t('Cài qua Microsoft Store: không có cảnh báo, tự động cập nhật, miễn phí.', 'Install from the Microsoft Store: no warnings, automatic updates, free.') ?></p>
+        </div>
+        <p class="alt-title"><?= t('Hoặc tải trình cài đặt từ microads.vn:', 'Or download the installer from microads.vn:') ?></p>
+        <?php endif; ?>
+        <div class="dl<?= $store ? ' dl-alt' : '' ?>">
         <?php if ($web): ?>
           <a class="btn primary big" id="dl-main" href="/office/download/<?= h(rawurlencode($web['file'])) ?>" data-warn><?= t('Tải Microads Office', 'Download Microads Office') ?></a>
-          <a class="btn big ghost" id="dl-full" href="/office/download/<?= h(rawurlencode($latest['file'])) ?>" data-warn><?= t('Bộ cài đầy đủ', 'Full installer') ?> <?= h($latest['version']) ?></a>
         <?php else: ?>
           <a class="btn primary big" id="dl-full" href="/office/download/<?= h(rawurlencode($latest['file'])) ?>" data-warn><?= t('Tải Microads Office', 'Download Microads Office') ?> <?= h($latest['version']) ?></a>
         <?php endif; ?>
-        <?php if ($store): ?>
-          <a class="btn big store" id="dl-store" href="<?= h($store['page']) ?>"><?= $storeIcon ?><?= t('Tải từ Microsoft Store', 'Get it from Microsoft Store') ?></a>
-        <?php else: ?>
+        <?php if (!$store): ?>
           <button type="button" class="btn big store" id="dl-store" data-wait><?= $storeIcon ?><?= t('Tải từ Microsoft Store', 'Get it from Microsoft Store') ?></button>
         <?php endif; ?>
         </div>
         <?php if ($web): ?>
-        <p class="meta"><?= t('Windows 10/11 64-bit · trình cài đặt', 'Windows 10/11 64-bit · installer') ?> <?= fmt_size((int)$web['size']) ?> <?= t('luôn cài bản mới nhất', 'always installs the latest version') ?> <b><?= h($latest['version']) ?></b> (<?= t('phát hành', 'released') ?> <?= h(date('d/m/Y', strtotime($latest['date']))) ?>) · <?= t('bộ cài đầy đủ', 'full installer') ?> <?= fmt_size((int)$latest['size']) ?></p>
+        <p class="meta"><?= t('Windows 10/11 64-bit · trình cài đặt', 'Windows 10/11 64-bit · installer') ?> <?= fmt_size((int)$web['size']) ?>, <?= t('luôn cài bản mới nhất', 'always installs the latest version') ?> <b><?= h($latest['version']) ?></b> (<?= t('phát hành', 'released') ?> <?= h(date('d/m/Y', strtotime($latest['date']))) ?>)</p>
         <?php else: ?>
         <p class="meta"><?= t('Windows 10/11 64-bit', 'Windows 10/11 64-bit') ?> · <?= fmt_size((int)$latest['size']) ?> · <?= t('phát hành', 'released') ?> <?= h(date('d/m/Y', strtotime($latest['date']))) ?></p>
         <?php endif; ?>
@@ -120,13 +125,12 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
               <li><?= t('Ứng dụng tự kiểm tra phiên bản mới; mọi bản cập nhật đều có chữ ký số của Microads và được kiểm tra trước khi cài.', 'The apps check for new versions themselves; every update is digitally signed by Microads and verified before it is installed.') ?></li>
             </ol>
             <?php if ($web): ?>
-            <p><?= t('<b>Nên chọn nút nào?</b> <b>Tải Microads Office</b> là trình cài đặt trực tuyến nhỏ gọn, tự tải bản mới nhất từ microads.vn và chỉ chạy khi tệp có <b>chữ ký số hợp lệ của Microads</b>. <b>Bộ cài đầy đủ</b> dùng khi cần cài trên máy không có Internet. <b>Microsoft Store</b> cài không có cảnh báo và tự cập nhật.',
-                '<b>Which button?</b> <b>Download Microads Office</b> is a small web installer: it downloads the latest version from microads.vn and only runs it when the file carries a <b>valid Microads digital signature</b>. Use the <b>Full installer</b> for computers without Internet access. <b>Microsoft Store</b> installs without warnings and updates automatically.') ?></p>
+            <p><?= t('<b>Nên chọn cách nào?</b> <b>Microsoft Store</b> (khuyên dùng): cài không cảnh báo, tự cập nhật. <b>Trình cài đặt từ microads.vn</b>: tệp nhỏ, tự tải bản mới nhất và chỉ chạy khi tệp có <b>chữ ký số hợp lệ của Microads</b>.',
+                '<b>Which option?</b> <b>Microsoft Store</b> (recommended): installs without warnings and updates automatically. <b>Installer from microads.vn</b>: a small file that downloads the latest version and only runs it when it carries a <b>valid Microads digital signature</b>.') ?></p>
             <?php endif; ?>
             <p class="muted small"><a href="/office/code-signing">Code signing policy</a> · <?= t('mã nguồn công khai tại', 'source code at') ?> <a href="https://github.com/microads-vn/microads-office">github.com/microads-vn/microads-office</a><br>
               <?= t('Kiểm tra tính toàn vẹn (PowerShell):', 'Verify integrity (PowerShell):') ?> <code>Get-FileHash &lt;<?= t('tệp', 'file') ?>&gt;</code><br>
-              <?php if ($web): ?><?= h($web['file']) ?> — SHA-256: <code class="hash" id="sha-web"><?= h($web['sha256']) ?></code><br><?php endif; ?>
-              <?= h($latest['file']) ?> — SHA-256: <code class="hash" id="sha-full"><?= h($latest['sha256']) ?></code></p>
+              <?php if ($web): ?><?= h($web['file']) ?> — SHA-256: <code class="hash" id="sha-web"><?= h($web['sha256']) ?></code><?php endif; ?></p>
           </div>
         </details>
       <?php else: ?>

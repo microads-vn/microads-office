@@ -175,10 +175,17 @@ function blog_cta(string $lang, string $variant = 'end'): string {
     $btn = $vi ? 'Tải miễn phí ngay' : 'Download free now';
     $more = $vi ? 'Xem chi tiết' : 'Learn more';
     $ticks = $vi ? ['Miễn phí 100%, mãi mãi', 'Không cần tài khoản', 'Mở và lưu .docx, .xlsx, ký số PDF'] : ['100% free, forever', 'No account required', 'Opens and saves .docx and .xlsx, signs PDFs'];
+    if (store_links(load_config())) $ticks[] = $vi ? 'Đã qua kiểm duyệt của Microsoft, có trên Microsoft Store' : 'Passed Microsoft’s certification, on the Microsoft Store';
     $li = implode('', array_map(fn($x) => '<li>' . h($x) . '</li>', $ticks));
+    static $store = false;
+    if ($store === false) $store = store_links(load_config());
+    // Microsoft Store first (no warnings, automatic updates); the .exe stays available as a secondary link.
+    $actions = $store
+        ? '<a class="store-badge" href="' . h($store['page']) . '" rel="noopener"><img src="/office/assets/ms-store-badge-' . ($vi ? 'vi' : 'en') . '.svg" alt="' . h($vi ? 'Tải xuống từ Microsoft Store' : 'Download from the Microsoft Store') . '" width="242" height="66" loading="lazy"></a>'
+          . '<a class="cta-more" href="/office/' . $web . '" data-warn>' . h($vi ? 'hoặc tải trình cài đặt' : 'or download the installer') . ' →</a>'
+        : '<a class="btn primary big" href="/office/' . $web . '" data-warn>' . h($btn) . '</a><a class="cta-more" href="' . h(home_path($lang)) . '">' . h($more) . ' →</a>';
     return '<aside class="cta cta-' . $variant . '" aria-label="' . h($title) . '"><div class="cta-text"><p class="cta-title">' . h($title) . '</p><p>' . $text . '</p><ul class="ticks">' . $li . '</ul></div>'
-        . '<div class="cta-actions"><a class="btn primary big" href="/office/' . $web . '" data-warn>' . h($btn) . '</a>'
-        . '<a class="cta-more" href="' . h(home_path($lang)) . '">' . h($more) . ' →</a></div></aside>';
+        . '<div class="cta-actions">' . $actions . '</div></aside>';
 }
 
 /** Inserts the middle call-to-action before the third H2 (or at the end of a short post). */

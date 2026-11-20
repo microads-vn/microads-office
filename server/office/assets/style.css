@@ -226,3 +226,18 @@ pre.log{font-size:12px;white-space:pre-wrap;background:#17261c08;border-radius:8
 .post-body .cta ul.ticks{padding-left:0;margin:6px 0 0}.post-body .cta li{margin:0}
 .post-body .cta p{margin:0 0 8px;font-size:16px;line-height:1.6;color:#ffffffd9}
 .post-body .cta a.btn{color:#fff;text-decoration:none}.post-body .cta a.cta-more{color:#ffffffb3}
+/* Microsoft Store first (official badge) */
+.store-first{margin-top:10px}
+.store-badge{display:inline-block;line-height:0;border-radius:10px;transition:transform .15s,box-shadow .15s}
+.store-badge:hover{transform:translateY(-2px);box-shadow:0 8px 22px #0007}
+.store-badge:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.store-first .store-badge img{width:322px;height:auto;max-width:100%}
+.store-note{margin:8px 0 0;color:#ffffffcc;font-size:15px}.store-note b{color:#5fd27a}
+.alt-title{margin:18px 0 0;color:#ffffffa6;font-size:14px}
+.dl.dl-alt{margin-top:6px}.dl.dl-alt .btn.big{font-size:15px;padding:9px 16px}
+.dl.dl-alt .btn.primary{background:transparent;border-color:#ffffff59;color:#fff}.dl.dl-alt .btn.primary:hover{background:#ffffff1a}
+.cta .store-badge img{width:242px;height:auto;max-width:100%}
+@media (max-width:520px){.dl.dl-alt .btn.big{display:block;width:100%}.store-first .store-badge img{width:100%}}
+@media (max-width:520px){.store-first .store-badge{display:block;max-width:360px}.store-first .store-badge img{width:100%;height:auto}.cta .store-badge{display:block;width:100%;max-width:300px;margin:0 auto}.cta .store-badge img{width:100%}}
+.store-cert{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;color:#fff;font-weight:600;font-size:15px;line-height:1.45}
+.store-cert svg{flex-shrink:0;color:#5fd27a;margin-top:1px}

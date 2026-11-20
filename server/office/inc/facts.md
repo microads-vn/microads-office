@@ -7,7 +7,11 @@ Price: free forever. No account, no sign-up, no subscription, no trial period, n
 Platform: Windows 10 and Windows 11, 64-bit ONLY. There is NO macOS, Linux, Android, iOS or web version — never claim one.
 Interface languages: Vietnamese and English (switch with the flag button).
 Installation: one installer; per-user install without administrator rights; small web installer (80 KB) that downloads the latest
-signed version; full offline installer (~55 MB); silent install for IT (`--silent`). Microsoft Store release is pending review.
+signed version; silent install for IT (`--silent`).
+Microsoft Store: Microads Office passed Microsoft's Store certification and is officially published on the Microsoft Store
+(https://apps.microsoft.com/detail/9PHM0WX16WDR) — installs without browser/SmartScreen warnings and updates automatically.
+Say exactly that ("passed Microsoft's certification / officially published on the Microsoft Store"); never claim Microsoft endorses,
+partners with or recommends Microads.
 Updates: built-in "Check for updates"; every update is verified with the Microads ECDSA release signature before installing.
 Publisher introduction: the apps show a short "Microads Office — published by Microads" window with the company's services and a
 link to microads.vn at start-up and when a file is opened from a folder; it closes immediately with one click (no waiting). There are
