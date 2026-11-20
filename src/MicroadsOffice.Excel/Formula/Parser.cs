@@ -19,9 +19,14 @@ public sealed record PercentExpr(Expr Operand) : Expr;
 public sealed record ParenExpr(Expr Inner) : Expr;
 public sealed record ArrayExpr(CellValue[,] Values) : Expr;
 public sealed record MissingExpr : Expr;
+/// <summary>Call of a computed function value, e.g. LAMBDA(x,x+1)(5).</summary>
+public sealed record CallExpr(Expr Callee, Expr[] Args) : Expr;
+/// <summary>Already evaluated value passed as an argument (lambda parameters, lifted arguments).</summary>
+public sealed record ValueExpr(object Value) : Expr;
 
 /// <summary>Cell / area / whole-column / whole-row reference. Coordinates are zero-based.</summary>
-public sealed record RefExpr(string? Sheet, RefKind Kind, int R1, int C1, int R2, int C2, bool AR1, bool AC1, bool AR2, bool AC2) : Expr
+/// <remarks><see cref="Spill"/>: the spill-range operator (A1#).</remarks>
+public sealed record RefExpr(string? Sheet, RefKind Kind, int R1, int C1, int R2, int C2, bool AR1, bool AC1, bool AR2, bool AC2, bool Spill = false) : Expr
 {
     public CellRange Range => Kind switch
     {
@@ -125,14 +130,14 @@ public sealed class FormulaParser
                 if (k < _s.Length && _s[k] == '(')
                 {
                     var fn = word.ToUpperInvariant();
-                    foreach (var pre in new[] { "_XLFN._XLWS.", "_XLFN.", "_XLWS." }) if (fn.StartsWith(pre)) fn = fn[pre.Length..];
+                    foreach (var pre in new[] { "_XLFN._XLWS.", "_XLFN.", "_XLWS.", "_XLPM." }) if (fn.StartsWith(pre)) fn = fn[pre.Length..];
                     _toks.Add(new Token(TokType.Func, fn, start));
                     i = k + 1;
                     continue;
                 }
                 if (word.Equals("TRUE", StringComparison.OrdinalIgnoreCase)) _toks.Add(new Token(TokType.Bool, "TRUE", start, 1));
                 else if (word.Equals("FALSE", StringComparison.OrdinalIgnoreCase)) _toks.Add(new Token(TokType.Bool, "FALSE", start, 0));
-                else _toks.Add(new Token(TokType.Name, word, start));
+                else _toks.Add(new Token(TokType.Name, word.StartsWith("_xlpm.", StringComparison.OrdinalIgnoreCase) ? word[6..] : word, start));
                 i = j;
                 continue;
             }
@@ -152,6 +157,22 @@ public sealed class FormulaParser
                     if (i + 1 < _s.Length && _s[i + 1] == '=') { _toks.Add(new Token(TokType.Op, ">=", i)); i += 2; }
                     else { _toks.Add(new Token(TokType.Op, ">", i)); i++; }
                     continue;
+                case '[':
+                {
+                    // optional LAMBDA parameter: [name]
+                    int j = i + 1;
+                    while (j < _s.Length && (char.IsLetterOrDigit(_s[j]) || _s[j] == '_' || _s[j] == '.')) j++;
+                    if (j > i + 1 && j < _s.Length && _s[j] == ']')
+                    {
+                        var w = _s[(i + 1)..j];
+                        if (w.StartsWith("_xlpm.", StringComparison.OrdinalIgnoreCase)) w = w[6..];
+                        _toks.Add(new Token(TokType.Name, "[" + w + "]", i));
+                        i = j + 1;
+                        continue;
+                    }
+                    break;
+                }
+                case '@': _toks.Add(new Token(TokType.Op, "@", i)); i++; continue;
                 case '+': case '-': case '*': case '/': case '^': case '&': case '=': case '%':
                     _toks.Add(new Token(TokType.Op, ch.ToString(), i)); i++; continue;
             }
@@ -206,9 +227,15 @@ public sealed class FormulaParser
         if (!range && p1.Kind != 0) return false; // bare "A" or "3" is not a reference
         // must not be followed by an identifier char or '(' (function like LOG10( ) )
         if (j < _s.Length && (char.IsLetterOrDigit(_s[j]) || _s[j] == '_' || _s[j] == '(' || _s[j] == '.')) return false;
+        bool spill = false;
+        if (!range && p1.Kind == 0 && j < _s.Length && _s[j] == '#' && !Errors.All.Any(e => string.Compare(_s, j, e, 0, e.Length, StringComparison.OrdinalIgnoreCase) == 0))
+        {
+            spill = true;
+            j++;
+        }
         RefExpr r;
         if (p1.Kind == 0)
-            r = new RefExpr(sheet, range ? RefKind.Area : RefKind.Cell, p1.Row, p1.Col, p2.Row, p2.Col, p1.AbsR, p1.AbsC, p2.AbsR, p2.AbsC);
+            r = new RefExpr(sheet, range ? RefKind.Area : RefKind.Cell, p1.Row, p1.Col, p2.Row, p2.Col, p1.AbsR, p1.AbsC, p2.AbsR, p2.AbsC, spill);
         else if (p1.Kind == 1)
             r = new RefExpr(sheet, RefKind.Cols, 0, p1.Col, Addr.MaxRows - 1, p2.Col, false, p1.AbsC, false, p2.AbsC);
         else
@@ -302,7 +329,9 @@ public sealed class FormulaParser
     {
         if (IsOp("-")) { Next(); return new UnaryExpr('-', ParseUnary()); }
         if (IsOp("+")) { Next(); return new UnaryExpr('+', ParseUnary()); }
+        if (IsOp("@")) { Next(); return new UnaryExpr('@', ParseUnary()); }
         var e = ParsePrimary();
+        while (Peek.Type == TokType.LParen && e is FuncExpr or ParenExpr or CallExpr) e = new CallExpr(e, ParseArgs("(call)"));
         while (IsOp("%")) { Next(); e = new PercentExpr(e); }
         return e;
     }
@@ -326,23 +355,35 @@ public sealed class FormulaParser
             }
             case TokType.Func:
             {
-                var args = new List<Expr>();
                 if (Peek.Type == TokType.RParen) { Next(); return new FuncExpr(t.Text, []); }
-                while (true)
-                {
-                    if (Peek.Type is TokType.Comma or TokType.RParen) args.Add(new MissingExpr());
-                    else args.Add(ParseCompare());
-                    var sep = Next();
-                    if (sep.Type == TokType.RParen) break;
-                    if (sep.Type != TokType.Comma) throw new FormulaParseException("Expected ',' or ')' in " + t.Text, sep.Pos);
-                }
-                return new FuncExpr(t.Text, args.ToArray());
+                return new FuncExpr(t.Text, ParseArgsAfterParen(t.Text));
             }
             case TokType.LBrace: return ParseArray(t.Pos);
             case TokType.Op when t.Text == "-" || t.Text == "+":
                 _i--; return ParseUnary();
         }
         throw new FormulaParseException(t.Type == TokType.End ? "Incomplete formula" : "Unexpected '" + t.Text + "'", t.Pos);
+    }
+
+    private Expr[] ParseArgs(string what)
+    {
+        Next(); // '('
+        if (Peek.Type == TokType.RParen) { Next(); return []; }
+        return ParseArgsAfterParen(what);
+    }
+
+    private Expr[] ParseArgsAfterParen(string what)
+    {
+        var args = new List<Expr>();
+        while (true)
+        {
+            if (Peek.Type is TokType.Comma or TokType.RParen) args.Add(new MissingExpr());
+            else args.Add(ParseCompare());
+            var sep = Next();
+            if (sep.Type == TokType.RParen) break;
+            if (sep.Type != TokType.Comma) throw new FormulaParseException("Expected ',' or ')' in " + what, sep.Pos);
+        }
+        return args.ToArray();
     }
 
     private Expr ParseArray(int pos)
@@ -399,6 +440,12 @@ public static class FormulaPrinter
             case ParenExpr p: sb.Append('('); Write(sb, p.Inner); sb.Append(')'); break;
             case PercentExpr pc: Write(sb, pc.Operand); sb.Append('%'); break;
             case UnaryExpr u: sb.Append(u.Op); Write(sb, u.Operand); break;
+            case CallExpr ce:
+                Write(sb, ce.Callee);
+                sb.Append('(');
+                for (int i = 0; i < ce.Args.Length; i++) { if (i > 0) sb.Append(','); Write(sb, ce.Args[i]); }
+                sb.Append(')');
+                break;
             case BinaryExpr b: Write(sb, b.Left); sb.Append(b.Op); Write(sb, b.Right); break;
             case FuncExpr f:
                 sb.Append(f.Name).Append('(');
@@ -427,7 +474,7 @@ public static class FormulaPrinter
         var prefix = r.Sheet != null ? Addr.QuoteSheet(r.Sheet) + "!" : "";
         return r.Kind switch
         {
-            RefKind.Cell => prefix + Addr.ToA1(r.R1, r.C1, r.AR1, r.AC1),
+            RefKind.Cell => prefix + Addr.ToA1(r.R1, r.C1, r.AR1, r.AC1) + (r.Spill ? "#" : ""),
             RefKind.Area => prefix + Addr.ToA1(r.R1, r.C1, r.AR1, r.AC1) + ":" + Addr.ToA1(r.R2, r.C2, r.AR2, r.AC2),
             RefKind.Cols => prefix + (r.AC1 ? "$" : "") + Addr.ColName(r.C1) + ":" + (r.AC2 ? "$" : "") + Addr.ColName(r.C2),
             _ => prefix + (r.AR1 ? "$" : "") + (r.R1 + 1) + ":" + (r.AR2 ? "$" : "") + (r.R2 + 1)

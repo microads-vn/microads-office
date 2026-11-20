@@ -409,6 +409,78 @@ public static class UiTests
             Loc.Lang = Loc.English;
         });
 
+        t.Test("UI: Ctrl+V and drag & drop from other programs: screenshot after copying cells, copy / cut a picture, files and folders, browser image, text", () =>
+        {
+            var saved = MicroadsOffice.TestShared.ClipTestUtil.Save();
+            var dir = Path.Combine(outDir, "clip-src");
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            Directory.CreateDirectory(Path.Combine(dir, "Hồ sơ"));
+            var png = Path.Combine(dir, "logo.png");
+            using (var b = MicroadsOffice.TestShared.ClipTestUtil.TestImage(80, 40)) b.Save(png, ImageFormat.Png);
+            var doc = Path.Combine(dir, "bao cao.txt");
+            File.WriteAllText(doc, "x");
+            try
+            {
+                form.CmdNewFromTemplate("blank");
+                Pump(3);
+                var S0 = S();
+                Type(0, 0, "A1"); Type(1, 0, "A2");
+                grid.Select(0, 0); grid.CopySelection(false);
+                // a screenshot taken after copying cells must paste the screenshot, not the old cells
+                using (var shot = MicroadsOffice.TestShared.ClipTestUtil.TestImage()) MicroadsOffice.TestShared.ClipTestUtil.SetNativeDib(shot);
+                grid.Select(5, 3); grid.Paste(); Pump(3);
+                T.Eq(1, S().Pictures.Count, "PrtSc pasted as a picture");
+                T.True(S().GetValue(5, 3).IsBlank, "old copied cells not pasted");
+                using (var shot = MicroadsOffice.TestShared.ClipTestUtil.TestImage(60, 60)) MicroadsOffice.TestShared.ClipTestUtil.SetPngOnly(shot);
+                grid.Select(10, 1); grid.Paste(); Pump(3);
+                T.Eq(2, S().Pictures.Count, "PNG pasted");
+                // copy a picture: same size when pasted here, a real picture for other programs
+                var first = S().Pictures[0];
+                grid.SelectObject(first);
+                grid.CopySelection(false);
+                var cd = DataTransfer.ReadClipboard();
+                T.True(DataTransfer.Picture(cd) != null && cd!.GetDataPresent("PNG"), "picture on the clipboard (bitmap + PNG)");
+                grid.SelectObject(null); grid.Select(15, 0); grid.Paste(); Pump(3);
+                T.Eq(3, S().Pictures.Count, "picture copied");
+                T.Eq(first.Bounds.Size, S().Pictures[2].Bounds.Size);
+                // cut removes it; pasting puts it back
+                grid.SelectObject(S().Pictures[2]);
+                grid.CopySelection(true); Pump(3);
+                T.Eq(2, S().Pictures.Count, "cut removes the picture");
+                grid.Select(20, 0); grid.Paste(); Pump(3);
+                T.Eq(3, S().Pictures.Count, "cut picture pasted");
+                // files and a folder from Explorer: picture placed, others written as links down the column (ONE undo step)
+                MicroadsOffice.TestShared.ClipTestUtil.SetFiles(png, doc, Path.Combine(dir, "Hồ sơ"));
+                grid.SelectObject(null); grid.Select(30, 2); grid.Paste(); Pump(3);
+                T.Eq(4, S().Pictures.Count, "picture file pasted");
+                T.Eq(doc, S().GetValue(30, 2).ToString());
+                T.True(S().Links.TryGetValue(Sheet.Key(30, 2), out var l1) && l1.StartsWith("file:"), "file link");
+                T.True(S().GetValue(31, 2).ToString().EndsWith("Hồ sơ") && S().Links.ContainsKey(Sheet.Key(31, 2)), "folder link");
+                form.Doc.Undo(); Pump(3);
+                T.Eq(3, S().Pictures.Count, "files pasted as one undo step");
+                T.True(S().GetValue(30, 2).IsBlank, "links undone");
+                // drag & drop on a cell: text from another program, an image dragged out of a browser
+                var cellPt = Point.Empty; for (int x = 0; x < grid.Width && cellPt == Point.Empty; x += 4) if (grid.HitTest(new Point(x, grid.Height / 2)).Area == HitArea.Cell) cellPt = new Point(x + 30, grid.Height / 2);
+                T.True(grid.DropData(new DataObject(DataFormats.UnicodeText, "Kéo từ Notepad"), cellPt), "text dropped");
+                T.True(S().GetValue(S().Selection.R1, S().Selection.C1).ToString() == "Kéo từ Notepad", "text in the drop cell");
+                using (var b = MicroadsOffice.TestShared.ClipTestUtil.TestImage(50, 30))
+                    T.True(grid.DropData(MicroadsOffice.TestShared.ClipTestUtil.VirtualFile("anh.jpg.png", MicroadsOffice.TestShared.ClipTestUtil.Png(b)), cellPt), "browser image dropped");
+                T.Eq(4, S().Pictures.Count, "virtual file placed as a picture");
+                // cells copied in another spreadsheet program (text + a picture of the cells): the text wins
+                var both = new DataObject();
+                both.SetText("1\t2\r\n3\t4");
+                using (var b = MicroadsOffice.TestShared.ClipTestUtil.TestImage(30, 30)) both.SetImage(new Bitmap(b));
+                MicroadsOffice.TestShared.ClipTestUtil.Restore(new MicroadsOffice.TestShared.ClipTestUtil.Snapshot());
+                Clipboard.SetDataObject(both, true, 10, 100);
+                grid.SelectObject(null); grid.Select(40, 0); grid.Paste(); Pump(3);
+                T.Eq(4, S().Pictures.Count, "no picture for copied cells");
+                T.Eq("4", S().GetValue(41, 1).ToString());
+                form.Doc.Modified = false;
+                _ = S0;
+            }
+            finally { MicroadsOffice.TestShared.ClipTestUtil.Restore(saved); }
+        });
+
         t.Test("UI: AutoRecover writes a recovery copy and closing cleans it up", () =>
         {
             form.CmdNewFromTemplate("list");

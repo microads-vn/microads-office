@@ -23,7 +23,7 @@ Gỡ cài đặt: Cài đặt Windows › Ứng dụng › Microads Office › G
 | Ứng dụng | Mở bằng | Dùng để |
 |---|---|---|
 | Microads Office **Word** | Lối tắt "Microads Office Word", hoặc bấm đúp .docx/.rtf/.txt | Soạn văn bản theo trang in thật, mẫu công văn NĐ 30/2020, bảng, ảnh, mục lục, đầu/chân trang, xuất PDF, in |
-| Microads Office **Excel** | Lối tắt "Microads Office Excel", hoặc .xlsx/.csv | Bảng tính, >230 hàm (`=DOCSO(A1)` đọc số thành chữ), biểu đồ, lọc/sắp xếp, định dạng có điều kiện, in/PDF |
+| Microads Office **Excel** | Lối tắt "Microads Office Excel", hoặc .xlsx/.csv | Bảng tính, 502 hàm (đủ các nhóm như Excel 365, `=DOCSO(A1)` đọc số thành chữ), biểu đồ, lọc/sắp xếp, định dạng có điều kiện, in/PDF |
 | Microads Office **PDF** | Lối tắt "Microads Office PDF", hoặc .pdf | Đọc, ký số (USB Token, .pfx), xác thực chữ ký, chèn dấu ảnh, in |
 | **Microads Office** (Hub) | Lối tắt "Microads Office" | Chọn ứng dụng, mở tệp bất kỳ, tài liệu gần đây |
 
@@ -63,6 +63,36 @@ Nút **Trợ lý AI** (ngôi sao tím) ở cuối thẻ **Trang chủ** của Wo
 **Quyền riêng tư:** trợ lý chỉ kết nối khi bạn bấm Gửi; nội dung được gửi thẳng tới dịch vụ bạn chọn (không qua máy chủ Microads). Bỏ chọn
 *Gửi kèm nội dung văn bản đang mở* nếu chỉ muốn hỏi chung. Khóa và phiên đăng nhập được mã hóa trên máy (Windows DPAPI). Đăng xuất / Xóa khóa /
 Ngắt kết nối Claude Desktop trong Cài đặt Trợ lý AI. Chi tiết: https://microads.vn/office/privacy#ai-assistant
+
+### 4c. Dán (Ctrl+V) và kéo thả từ chương trình khác (từ bản 2.0.4)
+
+| Bạn làm | Word | Excel | PDF |
+|---|---|---|---|
+| Chụp màn hình (PrtSc, Snipping Tool, Zalo…) rồi Ctrl+V | Chèn ảnh tại con trỏ | Đặt ảnh tại ô đang chọn (kể cả khi trước đó đã sao chép ô) | Ảnh thành **dấu ảnh**: bấm vào trang để đặt, Ctrl+S để lưu |
+| Chọn ảnh rồi Ctrl+C / Ctrl+X | Ảnh lên bộ nhớ tạm dạng ảnh (dán được sang Zalo, Paint, Excel…) | Như Word; dán lại trong Excel giữ nguyên kích thước | — |
+| Sao chép tệp / thư mục trong Explorer rồi Ctrl+V | Ảnh được chèn; tệp khác và thư mục thành **liên kết** (Ctrl+bấm mở thư mục / hiện tệp trong Explorer, không bao giờ chạy chương trình) | Ảnh được đặt; tệp khác và thư mục ghi vào các ô bên dưới, có liên kết | Ảnh đầu tiên thành dấu ảnh |
+| Kéo thả từ chương trình khác (chữ, ảnh từ trình duyệt / Zalo / Paint, tệp) | Chèn đúng chỗ thả chuột | Chèn vào ô dưới chuột | PDF được mở; ảnh thành dấu ảnh |
+| Kéo thả tài liệu .docx / .xlsx / .pdf | Mở tài liệu | Mở tài liệu | Mở tệp PDF |
+
+Mỗi lần dán là một bước Hoàn tác (Ctrl+Z). Ảnh từ trang web chỉ lấy khi trình duyệt đã đưa sẵn ảnh vào bộ nhớ tạm hoặc khi kéo thả; Microads Office không tự tải ảnh từ Internet.
+
+### 4d. Hàm và mảng động trong Excel (từ bản 2.0.4)
+
+Microads Excel có **502 hàm** — đủ các nhóm của Excel 365: Toán học, Thống kê (cả các hàm phân phối NORM.DIST, T.TEST…), Logic,
+Tra cứu, Văn bản (cả REGEXTEST/REGEXEXTRACT/REGEXREPLACE, TEXTSPLIT), Ngày giờ, Tài chính (cả trái phiếu PRICE, YIELD, XIRR…),
+Kỹ thuật (đổi cơ số, số phức, CONVERT…), Cơ sở dữ liệu (DSUM, DCOUNT…), Web (ENCODEURL, FILTERXML) và nhóm Tương thích
+(tên hàm cũ như NORMDIST, STDEVP). Xem tất cả: thẻ **Công thức › Chèn hàm** (Shift+F3) hoặc nút **Hàm khác**.
+
+- **Mảng động (tràn ô)**: công thức trả về nhiều giá trị chỉ cần gõ ở **một ô**, kết quả tự tràn xuống/sang phải, ví dụ
+  `=FILTER(A2:C100, C2:C100>1000000)`, `=SORT(UNIQUE(B2:B100))`, `=SEQUENCE(12)`. Vùng tràn có viền xanh; bấm ô trong vùng tràn,
+  thanh công thức hiện công thức gốc màu xám. Nếu vùng tràn bị ô có dữ liệu chắn, ô công thức báo **#SPILL!** — xóa ô chắn là xong.
+  Tham chiếu cả vùng tràn bằng dấu `#`: `=SUM(E2#)`.
+- **Tính theo từng phần tử**: `=SUMPRODUCT(--(LEFT(A2:A100,2)="HN"))`, `=LEN(A2:A10)`, `=SUM(COUNTIF(B:B,{"Đạt","Khá"}))` chạy như Excel 365.
+- **LET và LAMBDA**: đặt tên cho phần tính trung gian `=LET(thue, B2*10%, B2+thue)`; tạo hàm riêng trong **Trình quản lý tên**
+  (ví dụ tên `VAT` = `=LAMBDA(x, x*10%)` rồi dùng `=VAT(B2)`), cùng MAP, REDUCE, SCAN, BYROW, BYCOL, MAKEARRAY.
+- **Tổng hợp nhanh**: `=GROUPBY(A2:A100, C2:C100, SUM)` và `=PIVOTBY(A2:A100, B2:B100, C2:C100, SUM)` (bảng tổng hợp bằng công thức).
+- Tệp .xlsx lưu từ Microads mở đúng trong Microsoft Excel 365/2021 (công thức mảng động, LET, LAMBDA giữ nguyên). Tệp từ Excel đời cũ
+  (2016 trở về trước) vẫn tính như cũ: công thức cũ không tự tràn ô.
 
 ## B. Dành cho quản trị (Microads)
 

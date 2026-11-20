@@ -57,8 +57,8 @@ public readonly struct CellValue : IEquatable<CellValue>
 
 public static class Errors
 {
-    public const string Div0 = "#DIV/0!", NA = "#N/A", Name = "#NAME?", Ref = "#REF!", Value = "#VALUE!", Num = "#NUM!", Null = "#NULL!", Calc = "#CALC!";
-    public static readonly string[] All = [Div0, NA, Name, Ref, Value, Num, Null, Calc];
+    public const string Div0 = "#DIV/0!", NA = "#N/A", Name = "#NAME?", Ref = "#REF!", Value = "#VALUE!", Num = "#NUM!", Null = "#NULL!", Calc = "#CALC!", Spill = "#SPILL!";
+    public static readonly string[] All = [Div0, NA, Name, Ref, Value, Num, Null, Calc, Spill];
     public static bool IsErrorCode(string s) => All.Contains(s, StringComparer.OrdinalIgnoreCase);
 }
 

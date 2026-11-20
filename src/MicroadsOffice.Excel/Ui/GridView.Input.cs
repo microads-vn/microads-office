@@ -1130,40 +1130,58 @@ public sealed partial class GridView
         Invalidate();
     }
 
+    private const string PictureClipFormat = "MicroadsExcelPicture";
+    private static Picture? _clipPicture;
+    private static string? _clipPictureToken;
+
     public void CopySelection(bool cut)
     {
         if (_editing) { (_fromBar ? null : _editor)?.Copy(); return; }
-        if (SelectedObject is Picture pic && PictureImage(pic) is Image img) { try { Clipboard.SetDataObject(new DataObject(DataFormats.Bitmap, img), true, 10, 100); } catch { } return; }
+        if (SelectedObject is Picture pic && PictureImage(pic) is Image img)
+        {
+            // a picture goes out as a picture (bitmap + PNG) for every program, plus a token so Ctrl+V here keeps its size
+            var data = new DataObject();
+            DataTransfer.PutImage(data, img);
+            _clipPicture = pic.Clone();
+            _clipPictureToken = Guid.NewGuid().ToString("N");
+            data.SetData(PictureClipFormat, _clipPictureToken);
+            DataTransfer.WriteClipboard(data);
+            // copied cells no longer apply: Ctrl+V must paste this picture
+            Clip = null; CopyMarquee = null;
+            if (cut && !Sheet.Protected) DeleteSelectedObject();
+            Invalidate();
+            return;
+        }
         if (ExtraRanges.Count > 0) { Ux.Warn(FindForm(), Loc.T("Không thể sao chép nhiều vùng chọn rời nhau.", "This action won't work on multiple selections.")); return; }
         if (cut && Sheet.Protected) { CanEditActive(); return; }
         var sel = Selection;
         Clip = SheetOps.Copy(Sheet, sel, cut);
         _clipText = SheetOps.ToTsv(Sheet, Clip.Range);
+        _clipPicture = null;
         // Other programs (chat apps, clipboard managers) may hold the clipboard for a moment: retry instead of failing silently.
-        try { Clipboard.SetDataObject(new DataObject(DataFormats.UnicodeText, _clipText.Length > 0 ? _clipText : " "), true, 10, 100); } catch { }
+        DataTransfer.WriteClipboard(new DataObject(DataFormats.UnicodeText, _clipText.Length > 0 ? _clipText : " "));
         CopyMarquee = sel;
         Invalidate();
         StatusMessage?.Invoke(this, Loc.T("Chọn ô đích rồi nhấn Enter hoặc Ctrl+V để dán", "Select destination and press Enter or Ctrl+V"));
-    }
-
-    private static string? ReadClipboardText()
-    {
-        for (int i = 0; i < 10; i++)
-        {
-            try { return Clipboard.ContainsText() ? Clipboard.GetText() : null; }
-            catch (System.Runtime.InteropServices.ExternalException) { Thread.Sleep(100); }
-        }
-        return null;
     }
 
     public void Paste(PasteMode mode = PasteMode.All, bool transpose = false, bool skipBlanks = false)
     {
         if (_editing) { if (!_fromBar) _editor.Paste(); return; }
         if (Sheet.Protected) { CanEditActive(); return; }
-        string? sysText = null;
-        sysText = ReadClipboardText();
+        var data = DataTransfer.ReadClipboard();
+        var sysText = DataTransfer.Text(data);
+        var files = DataTransfer.Files(data);
+        // our own copied picture: pasted with the same size
+        if (files.Length == 0 && _clipPicture != null && data != null && data.GetDataPresent(PictureClipFormat) && data.GetData(PictureClipFormat) as string == _clipPictureToken)
+        {
+            AddPicture(_clipPicture.Data, _clipPicture.Ext, _clipPicture.Bounds.Size);
+            return;
+        }
         var target = Selection;
-        if (Clip != null && (sysText == null || sysText == _clipText || (sysText == " " && _clipText == "")))
+        // copied cells, unless something else was copied since (a screenshot, files, text from another program)
+        bool somethingElse = files.Length > 0 || (sysText == null && DataTransfer.Picture(data) != null);
+        if (Clip != null && !somethingElse && (sysText == null || sysText == _clipText || (sysText == " " && _clipText == "")))
         {
             _doc.Checkpoint(Loc.T("Dán", "Paste"));
             var pasted = SheetOps.Paste(Sheet, Clip, target, mode, transpose, skipBlanks);
@@ -1175,36 +1193,88 @@ public sealed partial class GridView
             RefreshAll();
             return;
         }
-        try
+        InsertData(data, sysText, files);
+    }
+
+    /// <summary>
+    /// Data from other programs (Ctrl+V or drag &amp; drop) at the active cell: files and folders (pictures become pictures,
+    /// other files and folders become links in the cells below), then text, then a picture (screenshot, copied image).
+    /// Text wins over a picture because spreadsheet programs put both on the clipboard when cells are copied.
+    /// </summary>
+    public bool InsertData(IDataObject? data) => InsertData(data, DataTransfer.Text(data), DataTransfer.Files(data));
+
+    private bool InsertData(IDataObject? data, string? text, string[] files)
+    {
+        if (data == null) return false;
+        if (files.Length > 0) { InsertFiles(files); return true; }
+        if (text == null && DataTransfer.Picture(data) is { } pic) { AddPicture(pic.Bytes, pic.Ext, null); return true; }
+        if (text == null) return false;
+        _doc.Checkpoint(Loc.T("Dán", "Paste"));
+        var r = SheetOps.PasteText(Sheet, text.TrimEnd('\r', '\n'), Selection.R1, Selection.C1);
+        Sheet.Selection = r;
+        _doc.Recalc();
+        RaiseContentChanged();
+        RaiseSelectionChanged();
+        RefreshAll();
+        return true;
+    }
+
+    /// <summary>Files and folders as ONE undo step: pictures are placed at the active cell, other files / folders are written as links down the column.</summary>
+    public void InsertFiles(IReadOnlyList<string> files)
+    {
+        var images = DataTransfer.ImageFiles(files.Where(DataTransfer.IsImageFile));
+        var others = files.Where(f => !DataTransfer.IsImageFile(f)).ToList();
+        if (images.Count == 0 && others.Count == 0) return;
+        _doc.Checkpoint(Loc.T("Dán", "Paste"));
+        var a = Active;
+        for (int i = 0; i < images.Count; i++) AddPicture(images[i].Bytes, images[i].Ext, null, i * 24, checkpoint: false);
+        if (others.Count > 0)
         {
-            if (Clipboard.ContainsImage() && sysText == null)
+            for (int k = 0; k < others.Count; k++)
             {
-                var img = Clipboard.GetImage();
-                if (img != null) { InsertPicture(img); return; }
+                Sheet.SetValue(a.Row + k, a.Col, CellValue.Text(others[k]));
+                Sheet.Links[Sheet.Key(a.Row + k, a.Col)] = new Uri(others[k]).AbsoluteUri;
             }
-        }
-        catch { }
-        if (sysText != null)
-        {
-            _doc.Checkpoint(Loc.T("Dán", "Paste"));
-            var r = SheetOps.PasteText(Sheet, sysText.TrimEnd('\r', '\n'), target.R1, target.C1);
-            Sheet.Selection = r;
+            if (images.Count == 0) Sheet.Selection = new CellRange(a.Row, a.Col, a.Row + others.Count - 1, a.Col);
             _doc.Recalc();
-            RaiseContentChanged();
             RaiseSelectionChanged();
-            RefreshAll();
         }
+        RaiseContentChanged();
+        RefreshAll();
+    }
+
+    /// <summary>Drops dragged data on the cell under the mouse.</summary>
+    public bool DropData(IDataObject? data, Point client)
+    {
+        if (_editing) CommitEdit();
+        var hit = HitTest(client);
+        if (hit.Area == HitArea.Cell) Select(hit.Row, hit.Col);
+        if (Sheet.Protected) { CanEditActive(); return false; }
+        Focus();
+        return InsertData(data);
     }
 
     public void InsertPicture(Image img)
     {
         using var ms = new MemoryStream();
         img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-        var x = (float)SheetX(Active.Col); var y = (float)SheetY(Active.Row);
-        float w = img.Width, h = img.Height;
-        if (w > 600) { h = h * 600 / w; w = 600; }
-        _doc.Checkpoint(Loc.T("Chèn ảnh", "Insert picture"));
-        var pic = new Picture { Data = ms.ToArray(), Ext = "png", Bounds = new RectangleF(x, y, w, h), Name = "Picture " + (Sheet.Pictures.Count + 1) };
+        AddPicture(ms.ToArray(), "png", null);
+    }
+
+    /// <summary>Places a picture at the active cell (natural size, at most 600 wide) and selects it.</summary>
+    private void AddPicture(byte[] data, string ext, SizeF? size, float offset = 0, bool checkpoint = true)
+    {
+        float w, h;
+        if (size is { } sz) { w = sz.Width; h = sz.Height; }
+        else
+        {
+            using var img = Image.FromStream(new MemoryStream(data));
+            w = img.Width; h = img.Height;
+            if (w > 600) { h = h * 600 / w; w = 600; }
+        }
+        var x = (float)SheetX(Active.Col) + offset; var y = (float)SheetY(Active.Row) + offset;
+        if (checkpoint) _doc.Checkpoint(Loc.T("Chèn ảnh", "Insert picture"));
+        var pic = new Picture { Data = data, Ext = ext, Bounds = new RectangleF(x, y, w, h), Name = "Picture " + (Sheet.Pictures.Count + 1) };
         Sheet.Pictures.Add(pic);
         SelectObject(pic);
         RaiseContentChanged();

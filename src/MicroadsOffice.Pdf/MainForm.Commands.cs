@@ -610,6 +610,30 @@ public sealed partial class MainForm
         d.ShowDialog(this);
     }
 
+    /// <summary>
+    /// Ctrl+V or a dropped picture (screenshot, copied image, image file, image dragged from a browser or chat app):
+    /// it becomes an image stamp that the next click places on the page, like Insert › Image stamp.
+    /// Returns false when the data holds no picture.
+    /// </summary>
+    public bool PlaceImageFrom(IDataObject? data)
+    {
+        var v = Current;
+        if (v == null || data == null) return false;
+        var files = DataTransfer.Files(data);
+        var img = files.Length > 0 ? DataTransfer.ImageFiles(files).FirstOrDefault() : DataTransfer.Picture(data);
+        if (img == null) return false;
+        if (v.Pdf.IsEncrypted) { Msg.Error(this, Loc.T("Không thể chèn ảnh vào tài liệu được mã hóa.", "Pictures cannot be inserted into an encrypted document.")); return true; }
+        v.Viewer.CancelPending();
+        _pendingStamp?.Dispose();
+        using (var loaded = img.Load()) _pendingStamp = new Bitmap(loaded);
+        _pendingStampOpacity = 1f;
+        v.Viewer.SetTool(ViewerTool.PlaceStamp);
+        v.Viewer.Focus();
+        UpdateStatus();
+        SetStatus(Loc.T("Bấm vào trang để đặt ảnh (Esc để hủy). Nhấn Lưu (Ctrl+S) để ghi vào tệp.", "Click on the page to place the picture (Esc to cancel). Press Save (Ctrl+S) to write it to the file."));
+        return true;
+    }
+
     private void CmdStamp()
     {
         var v = Current;
@@ -711,6 +735,10 @@ public sealed partial class MainForm
                 case Keys.Control | Keys.Shift | Keys.Oemplus: case Keys.Control | Keys.Shift | Keys.Add: v.Viewer.Rotate(true); return true;
                 case Keys.Control | Keys.Shift | Keys.OemMinus: case Keys.Control | Keys.Shift | Keys.Subtract: v.Viewer.Rotate(false); return true;
                 case Keys.Control | Keys.C: CmdCopy(); return true;
+                case Keys.Control | Keys.V: case Keys.Shift | Keys.Insert:
+                    if (PlaceImageFrom(DataTransfer.ReadClipboard())) return true;
+                    SetStatus(Loc.T("Không có ảnh trong bộ nhớ tạm để chèn vào PDF.", "There is no picture on the clipboard to insert into the PDF."));
+                    return true;
                 case Keys.Control | Keys.A: v.Viewer.SetTool(ViewerTool.SelectText); v.Viewer.SelectAll(); return true;
             }
         }

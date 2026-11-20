@@ -197,7 +197,8 @@ Bảng này là "hợp đồng" kiểm thử: mỗi dòng ✅/◐ phải có nú
 | Hạng mục | Microads |
 |---|---|
 | Toán tử `+ - * / ^ & % = <> < > <= >=`, tham chiếu tương đối/tuyệt đối `$A$1`, vùng `A1:B9`, cả cột `A:A`, trang khác `'Trang 1'!A1`, tên định nghĩa, hằng mảng `{1,2,3}` | ✅ |
-| Mã lỗi `#DIV/0! #N/A #NAME? #REF! #VALUE! #NUM! #NULL!`, phát hiện tham chiếu vòng | ✅ |
+| Mã lỗi `#DIV/0! #N/A #NAME? #REF! #VALUE! #NUM! #NULL! #CALC! #SPILL!`, phát hiện tham chiếu vòng | ✅ |
+| **502 hàm** — đủ 12 nhóm của Excel 365 (trừ nhóm Cube/OLAP và các hàm cần dịch vụ trực tuyến: WEBSERVICE, STOCKHISTORY, IMAGE, TRANSLATE, COPILOT, PY, FORECAST.ETS…) | ✅ |
 | Tự tính lại khi ô phụ thuộc thay đổi; chèn/xóa hàng cột tự sửa tham chiếu | ✅ |
 | Hàm Toán học (SUM, SUMIF(S), SUMPRODUCT, ROUND*, INT, MOD, ABS, SQRT, POWER, EXP, LN, LOG, PI, RAND, RANDBETWEEN, CEILING, FLOOR, TRUNC, PRODUCT, FACT, COMBIN, GCD, LCM, MROUND, QUOTIENT, SUBTOTAL, lượng giác…) | ✅ |
 | Hàm Thống kê (AVERAGE(IF/IFS), COUNT, COUNTA, COUNTBLANK, COUNTIF(S), MAX/MIN(IFS), MEDIAN, MODE, STDEV, VAR, LARGE, SMALL, RANK, PERCENTILE, QUARTILE, CORREL…) | ✅ |
@@ -205,7 +206,13 @@ Bảng này là "hợp đồng" kiểm thử: mỗi dòng ✅/◐ phải có nú
 | Hàm Tra cứu (VLOOKUP, HLOOKUP, LOOKUP, XLOOKUP, INDEX, MATCH, XMATCH, OFFSET, INDIRECT, ROW(S), COLUMN(S), ADDRESS) | ✅ |
 | Hàm Văn bản (LEFT, RIGHT, MID, LEN, LOWER, UPPER, PROPER, TRIM, CONCAT, CONCATENATE, TEXTJOIN, SUBSTITUTE, REPLACE, FIND, SEARCH, TEXT, VALUE, REPT, EXACT, CHAR, CODE, CLEAN, FIXED…) | ✅ |
 | Hàm Ngày giờ (DATE, TIME, TODAY, NOW, YEAR, MONTH, DAY, HOUR, MINUTE, SECOND, WEEKDAY, WEEKNUM, EDATE, EOMONTH, DATEDIF, DAYS, NETWORKDAYS, WORKDAY, DATEVALUE, YEARFRAC…) | ✅ |
-| Hàm Tài chính (PMT, FV, PV, NPV, IRR, RATE, NPER, IPMT, PPMT, SLN) | ✅ |
+| Hàm Tài chính (PMT, FV, PV, NPV, IRR, XIRR, XNPV, MIRR, RATE, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, EFFECT, NOMINAL, trái phiếu PRICE/YIELD/DURATION/ACCRINT/COUP*/ODDF*/ODDL*, TBILL*, AMORLINC…) | ✅ |
+| Hàm Kỹ thuật (BIN2DEC, DEC2HEX…, BITAND…, CONVERT, ERF, BESSEL*, số phức COMPLEX/IM*) | ✅ |
+| Hàm Cơ sở dữ liệu (DSUM, DAVERAGE, DCOUNT, DCOUNTA, DGET, DMAX, DMIN, DPRODUCT, DSTDEV(P), DVAR(P)) | ✅ |
+| Hàm Thống kê nâng cao (NORM/T/CHISQ/F/BINOM/POISSON/GAMMA/BETA/LOGNORM/WEIBULL… .DIST/.INV, T.TEST, Z.TEST, CONFIDENCE, LINEST, LOGEST, TREND, GROWTH, FREQUENCY, SKEW, KURT, COVARIANCE…) và các tên cũ (NORMDIST, TTEST…) | ✅ |
+| Hàm Web (ENCODEURL, FILTERXML) | ✅ |
 | Hàm Thông tin (ISBLANK, ISNUMBER, ISTEXT, ISERROR, ISNA, ISEVEN, ISODD, NA, TYPE, N, T) | ✅ |
 | Hàm tiếng Việt: `DOCSO(số)` đọc số thành chữ ("Một trăm hai mươi nghìn đồng") | ✅ |
-| Mảng động tràn ô (FILTER, SORT, UNIQUE, SEQUENCE), LAMBDA, LET | ✗ |
+| Mảng động tràn ô (FILTER, SORT, SORTBY, UNIQUE, SEQUENCE, VSTACK/HSTACK, TAKE/DROP, TOCOL/TOROW, WRAPROWS…, #SPILL!, tham chiếu `A1#`), tính theo từng phần tử (`LEN(A1:A9)`) | ✅ |
+| LET, LAMBDA (cả LAMBDA đặt tên, đệ quy, tham số tùy chọn `[x]`), MAP, REDUCE, SCAN, BYROW, BYCOL, MAKEARRAY, GROUPBY, PIVOTBY | ✅ |
+| Lưu .xlsx đúng chuẩn Excel 365 (tiền tố `_xlfn.`, mảng động `cm`/metadata) | ✅ |

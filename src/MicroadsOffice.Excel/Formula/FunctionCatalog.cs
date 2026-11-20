@@ -2,7 +2,7 @@ using MicroadsOffice.Core.Office;
 
 namespace MicroadsOffice.Excel.Formula;
 
-public enum FnCategory { Math, Statistical, Logical, Lookup, Text, DateTime, Financial, Information }
+public enum FnCategory { Math, Statistical, Logical, Lookup, Text, DateTime, Financial, Information, Engineering, Database, Compatibility, Web }
 
 public sealed record FunctionInfo(string Name, FnCategory Category, string Args, string DescVi, string DescEn)
 {
@@ -11,7 +11,7 @@ public sealed record FunctionInfo(string Name, FnCategory Category, string Args,
 }
 
 /// <summary>Names, categories, argument lists and descriptions (VI/EN) of every function.</summary>
-public static class FunctionCatalog
+public static partial class FunctionCatalog
 {
     public static string CategoryName(FnCategory c) => c switch
     {
@@ -22,6 +22,10 @@ public static class FunctionCatalog
         FnCategory.Text => Loc.T("Văn bản", "Text"),
         FnCategory.DateTime => Loc.T("Ngày & giờ", "Date & Time"),
         FnCategory.Financial => Loc.T("Tài chính", "Financial"),
+        FnCategory.Engineering => Loc.T("Kỹ thuật", "Engineering"),
+        FnCategory.Database => Loc.T("Cơ sở dữ liệu", "Database"),
+        FnCategory.Compatibility => Loc.T("Tương thích (bản cũ)", "Compatibility"),
+        FnCategory.Web => Loc.T("Web", "Web"),
         _ => Loc.T("Thông tin", "Information")
     };
 
@@ -233,7 +237,10 @@ SHEET|I|[value]|Số thứ tự trang tính|Sheet number
 SHEETS|I|[reference]|Số trang tính|Number of sheets
 ";
 
+    private static IEnumerable<string> AllData => [Data, DataDyn, DataFin, DataDist, DataEng, DataMisc];
+
     private static List<FunctionInfo>? _all;
+
 
     public static IReadOnlyList<FunctionInfo> All
     {
@@ -241,11 +248,18 @@ SHEETS|I|[reference]|Số trang tính|Number of sheets
         {
             if (_all != null) return _all;
             var list = new List<FunctionInfo>();
-            foreach (var line in Data.Split('\n'))
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var line in AllData.SelectMany(d => d.Split('\n')))
             {
                 var p = line.Trim().Split('|');
                 if (p.Length < 5) continue;
-                var cat = p[1] switch { "M" => FnCategory.Math, "S" => FnCategory.Statistical, "L" => FnCategory.Logical, "R" => FnCategory.Lookup, "T" => FnCategory.Text, "D" => FnCategory.DateTime, "F" => FnCategory.Financial, _ => FnCategory.Information };
+                if (!seen.Add(p[0])) continue;
+                var cat = p[1] switch
+                {
+                    "M" => FnCategory.Math, "S" => FnCategory.Statistical, "L" => FnCategory.Logical, "R" => FnCategory.Lookup, "T" => FnCategory.Text,
+                    "D" => FnCategory.DateTime, "F" => FnCategory.Financial, "E" => FnCategory.Engineering, "B" => FnCategory.Database,
+                    "C" => FnCategory.Compatibility, "W" => FnCategory.Web, _ => FnCategory.Information
+                };
                 list.Add(new FunctionInfo(p[0], cat, p[2], p[3], p[4]));
             }
             return _all = list;

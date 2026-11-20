@@ -151,6 +151,7 @@ public static class XlsxReader
                 }
                 continue;
             }
+            text = FileFormula.FromFile(text);
             if (local != null || (string?)dn.Attribute("hidden") == "1") { if (local != null && !wb.Names.ContainsKey(name)) wb.Names[name] = text; continue; }
             wb.Names[name] = text;
         }
@@ -358,6 +359,7 @@ public static class XlsxReader
             }
         }
         var shared = new Dictionary<string, (string Formula, int Row, int Col)>();
+        var arrays = new List<(int Row, int Col, CellRange Area)>();
         foreach (var row in root.Element(M + "sheetData")?.Elements(M + "row") ?? [])
         {
             int r = ((int?)row.Attribute("r") ?? 1) - 1;
@@ -412,9 +414,36 @@ public static class XlsxReader
                 if (formula == null && v.IsBlank && style == 0) continue;
                 var cell = s.GetOrCreate(r, col);
                 cell.Value = v;
-                cell.Formula = formula;
+                cell.Formula = formula == null ? null : FileFormula.FromFile(formula);
                 cell.StyleId = style;
+                if (formula != null)
+                {
+                    // cm = dynamic-array formula; t="array" = array formula over a range; anything else was written by an
+                    // Excel without dynamic arrays (or keeps "@"): arrays reduce to one value there
+                    bool isArray = (string?)fEl!.Attribute("t") == "array";
+                    cell.Implicit = c.Attribute("cm") == null && !isArray;
+                    if (isArray && Addr.TryParseRange((string?)fEl.Attribute("ref") ?? "", out var area) && !area.IsSingle && area.R1 == r && area.C1 == col)
+                        arrays.Add((r, col, area));
+                }
             }
+        }
+        foreach (var (ar, acol, area) in arrays)
+        {
+            // cached values of an array result belong to its formula (they are recomputed and re-spilled on load)
+            var master = s.GetCell(ar, acol);
+            if (master?.Formula == null) continue;
+            master.SpillRows = area.Rows;
+            master.SpillCols = area.Cols;
+            for (int i = 0; i < area.Rows; i++)
+                for (int j = 0; j < area.Cols; j++)
+                {
+                    if (i == 0 && j == 0) continue;
+                    var sc = s.GetCell(ar + i, acol + j);
+                    if (sc == null || sc.Formula != null) continue;
+                    sc.SpillFrom = master;
+                    sc.SpillDr = i;
+                    sc.SpillDc = j;
+                }
         }
         if (root.Element(M + "sheetProtection") is XElement prot && IsTrue(prot.Attribute("sheet")))
         {

@@ -24,7 +24,7 @@ Luồng: BA lập bảng tính năng → Kiến trúc chốt hợp đồng → 3
 | # | Yêu cầu của khách | Trạng thái | Cách đáp ứng | Bằng chứng |
 |---|---|---|---|---|
 | 1 | Nghiên cứu, phát triển Microads Office **Word** đầy đủ như MS Word | ✅ | Bộ soạn thảo tự xây: trang in thật, ribbon 7 thẻ + thẻ ngữ cảnh Bảng/Ảnh, .docx đọc/ghi, mẫu công văn NĐ 30/2020, xuất PDF, in | Word tests 37/37 (gọi >120 lệnh ribbon), DOCX đọc lại bằng python-docx |
-| 2 | Microads Office **Excel** đầy đủ như MS Excel | ✅ | Bảng tính tự xây: ~230 hàm (có `DOCSO` đọc số tiếng Việt), biểu đồ 7 loại, định dạng có điều kiện, lọc/sắp xếp, .xlsx/.csv, in/PDF | Excel tests 28/28 (298 phép kiểm công thức, 111 nút + 366 mục menu) |
+| 2 | Microads Office **Excel** đầy đủ như MS Excel | ✅ | Bảng tính tự xây: 502 hàm đủ các nhóm Excel 365, mảng động, LET/LAMBDA (có `DOCSO` đọc số tiếng Việt), biểu đồ 7 loại, định dạng có điều kiện, lọc/sắp xếp, .xlsx/.csv, in/PDF | Excel tests 28/28 (298 phép kiểm công thức, 111 nút + 366 mục menu) |
 | 3 | Tìm hiểu tính năng trước, **lên bảng tính năng** rồi mới làm | ✅ | Bảng đối chiếu MS Word/Excel ↔ Microads (đầy đủ/cơ bản/không làm + lý do) | `docs/BANG_TINH_NANG.md` |
 | 4 | Trọn gói trong **1 bộ Office** | ✅ | Một exe: Word, Excel, PDF + màn hình Microads Office (Hub) | E2E: Hub mở Excel |
 | 5 | Đổi tên PDF → **Microads Office PDF** | ✅ | Tiêu đề, trang bắt đầu, Giới thiệu, lối tắt | E2E "Pdf: file opened" |

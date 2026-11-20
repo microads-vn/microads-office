@@ -13,6 +13,7 @@ public static class RefAdjust
         BinaryExpr b => b with { Left = Map(b.Left, f), Right = Map(b.Right, f) },
         PercentExpr p => p with { Operand = Map(p.Operand, f) },
         ParenExpr p => p with { Inner = Map(p.Inner, f) },
+        CallExpr ce => ce with { Callee = Map(ce.Callee, f), Args = ce.Args.Select(a => Map(a, f)).ToArray() },
         _ => e
     };
 
@@ -26,6 +27,7 @@ public static class RefAdjust
             case BinaryExpr b: foreach (var x in Refs(b.Left)) yield return x; foreach (var x in Refs(b.Right)) yield return x; break;
             case PercentExpr p: foreach (var x in Refs(p.Operand)) yield return x; break;
             case ParenExpr p: foreach (var x in Refs(p.Inner)) yield return x; break;
+            case CallExpr ce: foreach (var x in Refs(ce.Callee)) yield return x; foreach (var a in ce.Args) foreach (var x in Refs(a)) yield return x; break;
         }
     }
 

@@ -36,6 +36,7 @@ public static class SheetActions
         {"freeze":"A2"}                             freeze rows above / columns left of this cell ("A1" removes)
         {"chart":{"type":"column|bar|line|pie|doughnut|area|scatter|stackedColumn","range":"A1:B6","title":"…","at":"F2"}}
         Formulas: English function names, comma "," between arguments, "." as decimal point, e.g. =IF(B2>=5,"Đạt","Không đạt"), =VLOOKUP(A2,Sheet2!A:B,2,FALSE). Only use functions this app supports (listed below). Number formats use Excel codes ("#,##0", "0.00%", "dd/mm/yyyy").
+        Dynamic arrays work like Excel 365: a formula returning several values (FILTER, SORT, UNIQUE, SEQUENCE, XLOOKUP of a row, A2:A9*2…) is written once in the top-left cell and spills into the cells below/right, which must stay empty (null) — otherwise #SPILL!. Refer to a spilled result as A2#. LET and LAMBDA are supported.
         Put headers in bold with a fill, use formulas (not hard-coded results) for totals, and autofit the columns you wrote.
         """;
 
@@ -182,8 +183,27 @@ public static class SheetActions
     public static void CheckFormula(string f)
     {
         if (!FormulaParser.TryParse(f, out var e, out var err) || e == null) throw new FormatException($"formula {f}: {err}");
+        var bound = new HashSet<string>(BoundNames(e), StringComparer.OrdinalIgnoreCase);
         foreach (var name in FunctionNames(e))
-            if (!Functions.Table.ContainsKey(name)) throw new FormatException($"formula {f}: function {name} is not supported");
+            if (!Functions.Table.ContainsKey(name) && !bound.Contains(name)) throw new FormatException($"formula {f}: function {name} is not supported");
+    }
+
+    /// <summary>LET variables and LAMBDA parameters (they may be called like functions: LET(f,LAMBDA(x,x*2),f(3))).</summary>
+    static IEnumerable<string> BoundNames(Expr e)
+    {
+        switch (e)
+        {
+            case FuncExpr fe:
+                if (fe.Name is "LET") for (int i = 0; i + 1 < fe.Args.Length; i += 2) if (fe.Args[i] is NameExpr n) yield return n.Name;
+                if (fe.Name is "LAMBDA") for (int i = 0; i + 1 < fe.Args.Length; i++) if (fe.Args[i] is NameExpr n) yield return n.Name.Trim('[', ']');
+                foreach (var a in fe.Args) foreach (var n in BoundNames(a)) yield return n;
+                break;
+            case CallExpr ce: foreach (var x in ce.Args.Prepend(ce.Callee)) foreach (var n in BoundNames(x)) yield return n; break;
+            case UnaryExpr u: foreach (var n in BoundNames(u.Operand)) yield return n; break;
+            case BinaryExpr b: foreach (var n in BoundNames(b.Left).Concat(BoundNames(b.Right))) yield return n; break;
+            case PercentExpr p: foreach (var n in BoundNames(p.Operand)) yield return n; break;
+            case ParenExpr pe: foreach (var n in BoundNames(pe.Inner)) yield return n; break;
+        }
     }
 
     static IEnumerable<string> FunctionNames(Expr e)
@@ -194,6 +214,7 @@ public static class SheetActions
                 yield return fe.Name;
                 foreach (var a in fe.Args) foreach (var n in FunctionNames(a)) yield return n;
                 break;
+            case CallExpr ce: foreach (var x in ce.Args.Prepend(ce.Callee)) foreach (var n in FunctionNames(x)) yield return n; break;
             case UnaryExpr u: foreach (var n in FunctionNames(u.Operand)) yield return n; break;
             case BinaryExpr b: foreach (var n in FunctionNames(b.Left).Concat(FunctionNames(b.Right))) yield return n; break;
             case PercentExpr p: foreach (var n in FunctionNames(p.Operand)) yield return n; break;

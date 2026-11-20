@@ -26,6 +26,28 @@ public sealed class ArrayVal(CellValue[,] v)
     public int Cols => V.GetLength(1);
 }
 
+/// <summary>A function value: LAMBDA(...) or a built-in function passed by name (BYROW(A1:C3, SUM)).</summary>
+public sealed class LambdaVal
+{
+    internal string[] Params = [];
+    internal bool[] Optional = [];
+    internal Expr? Body;
+    internal Ctx? Closure;
+    internal string? Builtin;
+    public int Arity => Builtin != null ? -1 : Params.Length;
+}
+
+/// <summary>LET / LAMBDA variable bindings (innermost first).</summary>
+internal sealed record Scope(string Name, Expr Value, Scope? Parent)
+{
+    public Expr? Find(string name)
+    {
+        for (var s = this; s != null; s = s.Parent)
+            if (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)) return s.Value;
+        return null;
+    }
+}
+
 /// <summary>Evaluation context of one formula.</summary>
 public sealed class Ctx
 {
@@ -33,8 +55,25 @@ public sealed class Ctx
     public Sheet Sheet { get; }
     public int Row { get; }
     public int Col { get; }
+    internal Scope? Scope { get; private init; }
     internal Ctx(Calc calc, Sheet sheet, int row, int col) { Calc = calc; Sheet = sheet; Row = row; Col = col; }
     public Workbook Book => Sheet.Book;
+
+    /// <summary>A child context with one more LET/LAMBDA variable.</summary>
+    internal Ctx Bind(string name, Expr value) => new(Calc, Sheet, Row, Col) { Scope = new Scope(name, value, Scope), Implicit = Implicit };
+
+    /// <summary>
+    /// Formula of a file written without dynamic arrays: range arguments of single-value functions and operators use
+    /// implicit intersection (Excel's "@"), except inside functions that take arrays (SUMPRODUCT, INDEX…).
+    /// </summary>
+    internal bool Implicit { get; private init; }
+    internal Ctx AsImplicit() => new(Calc, Sheet, Row, Col) { Implicit = true };
+    internal Ctx ArrayMode() => Implicit ? new(Calc, Sheet, Row, Col) { Scope = Scope } : this;
+    /// <summary>Context for a workbook name: the caller's LET/LAMBDA variables are not visible there.</summary>
+    internal Ctx Root() => Scope == null ? this : new(Calc, Sheet, Row, Col) { Implicit = Implicit };
+
+    /// <summary>Calls a function value with already evaluated arguments.</summary>
+    public object Invoke(LambdaVal f, params object[] args) => Calc.Invoke(f, args.Select(v => v is Expr e ? e : new ValueExpr(v)).ToArray(), this);
 
     public object Eval(Expr e) => Calc.Eval(e, this);
 
@@ -63,7 +102,7 @@ public sealed class Calc
     private readonly Workbook _wb;
     private int _stamp;
     private readonly HashSet<Cell> _evaluating = new();
-    private readonly Dictionary<Sheet, CellRange> _usedCache = new();
+    private readonly Dictionary<Sheet, (CellRange Data, List<(Cell Master, CellRange Area)> Spills)> _usedCache = new();
     private readonly Dictionary<string, Expr?> _nameCache = new(StringComparer.OrdinalIgnoreCase);
     public List<(Sheet Sheet, int Row, int Col)> Circular { get; } = new();
     public DateTime? FixedNow { get; set; }
@@ -76,20 +115,27 @@ public sealed class Calc
     {
         RunWithBigStack(() =>
         {
-            _stamp++;
-            _usedCache.Clear();
-            _nameCache.Clear();
-            Circular.Clear();
-            _evaluating.Clear();
-            foreach (var sheet in _wb.Sheets.ToList())
+            PurgeOrphanSpills();
+            // a spill range that grows can cover cells that were already read in this pass: run again (bounded)
+            for (int pass = 0; pass < 4; pass++)
             {
-                var formulas = sheet.Cells.Where(kv => kv.Value.Formula != null).Select(kv => kv.Key).ToList();
-                formulas.Sort();
-                foreach (var k in formulas)
+                _stamp++;
+                _usedCache.Clear();
+                _nameCache.Clear();
+                Circular.Clear();
+                _evaluating.Clear();
+                _spillGrew = false;
+                foreach (var sheet in _wb.Sheets.ToList())
                 {
-                    var (r, c) = Sheet.FromKey(k);
-                    if (sheet.Cells.TryGetValue(k, out var cell)) Ensure(sheet, r, c, cell);
+                    var formulas = sheet.Cells.Where(kv => kv.Value.Formula != null).Select(kv => kv.Key).ToList();
+                    formulas.Sort();
+                    foreach (var k in formulas)
+                    {
+                        var (r, c) = Sheet.FromKey(k);
+                        if (sheet.Cells.TryGetValue(k, out var cell)) Ensure(sheet, r, c, cell);
+                    }
                 }
+                if (!_spillGrew) break;
             }
         });
     }
@@ -133,7 +179,128 @@ public sealed class Calc
     {
         if (!s.Cells.TryGetValue(Sheet.Key(r, c), out var cell)) return CellValue.Blank;
         if (cell.Formula != null) Ensure(s, r, c, cell);
+        else if (cell.SpillFrom != null)
+        {
+            // a spilled value: bring its formula up to date first
+            int mr = r - cell.SpillDr, mc = c - cell.SpillDc;
+            var master = s.GetCell(mr, mc);
+            if (master != null && master == cell.SpillFrom && master.Formula != null)
+            {
+                Ensure(s, mr, mc, master);
+                return s.Cells.TryGetValue(Sheet.Key(r, c), out var now) ? now.Value : CellValue.Blank;
+            }
+        }
         return cell.Value;
+    }
+
+    // ------------------------------------------------------------------ dynamic arrays (spill)
+
+    private bool _spillGrew;
+
+    /// <summary>Removes spilled values whose formula was deleted, moved or changed shape outside a recalculation.</summary>
+    private void PurgeOrphanSpills()
+    {
+        foreach (var sheet in _wb.Sheets)
+        {
+            List<long>? remove = null;
+            foreach (var (k, cell) in sheet.Cells)
+            {
+                if (cell.SpillFrom == null) continue;
+                var (r, c) = Sheet.FromKey(k);
+                var m = cell.SpillFrom;
+                if (sheet.GetCell(r - cell.SpillDr, c - cell.SpillDc) == m && m.Formula != null && cell.SpillDr < m.SpillRows && cell.SpillDc < m.SpillCols
+                    && cell.SpillDr >= 0 && cell.SpillDc >= 0) continue;
+                cell.SpillFrom = null;
+                cell.Value = CellValue.Blank;
+                if (cell.IsEmpty) (remove ??= new()).Add(k);
+            }
+            if (remove != null) foreach (var k in remove) sheet.RemoveIfEmpty(k);
+        }
+    }
+
+    /// <summary>Clears the values spilled by <paramref name="master"/> at (r, c).</summary>
+    internal static void ClearSpill(Sheet sheet, int r, int c, Cell master)
+    {
+        if (master.SpillRows <= 0) return;
+        for (int i = 0; i < master.SpillRows; i++)
+            for (int j = 0; j < master.SpillCols; j++)
+            {
+                if (i == 0 && j == 0) continue;
+                var k = Sheet.Key(r + i, c + j);
+                if (!sheet.Cells.TryGetValue(k, out var sc) || sc.SpillFrom != master) continue;
+                sc.SpillFrom = null;
+                sc.Value = CellValue.Blank;
+                sheet.RemoveIfEmpty(k);
+            }
+        master.SpillRows = master.SpillCols = 0;
+    }
+
+    /// <summary>Writes an array result next to its formula cell; returns the value of the formula cell itself.</summary>
+    private CellValue Spill(Sheet sheet, int r, int c, Cell master, CellValue[,] arr)
+    {
+        int rows = arr.GetLength(0), cols = arr.GetLength(1);
+        int oldRows = master.SpillRows, oldCols = master.SpillCols;
+        if (rows == 0 || cols == 0) { ClearSpill(sheet, r, c, master); return CellValue.Error(Errors.Calc); }
+        bool blocked = r + rows > Addr.MaxRows || c + cols > Addr.MaxCols;
+        if (!blocked && (rows > 1 || cols > 1))
+        {
+            var area = new CellRange(r, c, r + rows - 1, c + cols - 1);
+            foreach (var m in sheet.Merges) if (m.Intersects(area)) { blocked = true; break; }
+            for (int i = 0; i < rows && !blocked; i++)
+                for (int j = 0; j < cols; j++)
+                {
+                    if (i == 0 && j == 0) continue;
+                    if (!sheet.Cells.TryGetValue(Sheet.Key(r + i, c + j), out var o)) continue;
+                    if (o.Formula != null) { blocked = true; break; }
+                    if (o.Value.IsBlank || o.SpillFrom == master) continue;
+                    if (o.SpillFrom != null)
+                    {
+                        var om = sheet.GetCell(r + i - o.SpillDr, c + j - o.SpillDc);
+                        if (om != o.SpillFrom || om.Formula == null) continue; // stale value, will be replaced
+                    }
+                    blocked = true;
+                    break;
+                }
+        }
+        ClearSpill(sheet, r, c, master);
+        if (blocked)
+        {
+            master.SpillBlocked = true;
+            if (oldRows > 1 || oldCols > 1) _spillGrew = true;
+            return CellValue.Error(Errors.Spill);
+        }
+        master.SpillBlocked = false;
+        if (rows > 1 || cols > 1)
+        {
+            for (int i = 0; i < rows; i++)
+                for (int j = 0; j < cols; j++)
+                {
+                    if (i == 0 && j == 0) continue;
+                    var sc = sheet.GetOrCreate(r + i, c + j);
+                    var v = arr[i, j];
+                    sc.Value = v.IsBlank ? CellValue.Number(0) : v;
+                    sc.SpillFrom = master;
+                    sc.SpillDr = i;
+                    sc.SpillDc = j;
+                }
+            master.SpillRows = rows;
+            master.SpillCols = cols;
+            _usedCache.Remove(sheet);
+            if (rows > oldRows || cols > oldCols) _spillGrew = true;
+        }
+        var first = arr[0, 0];
+        return first.IsBlank ? CellValue.Number(0) : first;
+    }
+
+    /// <summary>The range spilled by the formula in the cell referenced as A1#.</summary>
+    private RangeVal SpillRange(Sheet sheet, int r, int c)
+    {
+        var cell = sheet.GetCell(r, c);
+        if (cell?.Formula == null) throw new FormulaError(Errors.Ref);
+        Ensure(sheet, r, c, cell);
+        if (cell.SpillBlocked) throw new FormulaError(Errors.Spill);
+        if (cell.SpillRows <= 0) return new RangeVal(sheet, CellRange.Single(r, c));
+        return new RangeVal(sheet, new CellRange(r, c, r + cell.SpillRows - 1, c + cell.SpillCols - 1));
     }
 
     private void Ensure(Sheet sheet, int r, int c, Cell cell)
@@ -152,8 +319,18 @@ public sealed class Calc
                 try { cell.Ast = FormulaParser.Parse(cell.Formula!); }
                 catch { cell.Ast = new ErrorExpr(Errors.Name); }
             }
-            var ctx = new Ctx(this, sheet, r, c);
-            var v = Final(SafeEval(cell.Ast, ctx), ctx);
+            var ctx = cell.Implicit ? new Ctx(this, sheet, r, c).AsImplicit() : new Ctx(this, sheet, r, c);
+            var raw = SafeEval(cell.Ast, ctx);
+            CellValue v;
+            var arr = cell.Implicit ? null : SpillArray(raw);
+            cell.Dynamic = !cell.Implicit && raw is ArrayVal or RangeVal { Range.IsSingle: false };
+            if (arr != null) v = Spill(sheet, r, c, cell, arr);
+            else
+            {
+                if (cell.SpillRows > 0) { ClearSpill(sheet, r, c, cell); _usedCache.Remove(sheet); }
+                cell.SpillBlocked = false;
+                v = Final(raw, ctx);
+            }
             if (Circular.Any(x => x.Sheet == sheet && x.Row == r && x.Col == c)) v = CellValue.Number(0);
             cell.Value = v;
             cell.CalcStamp = _stamp;
@@ -169,6 +346,14 @@ public sealed class Calc
         catch (Exception) { return CellValue.Error(Errors.Value); }
     }
 
+    /// <summary>An array result that a dynamic-array formula spills (null for single values).</summary>
+    private CellValue[,]? SpillArray(object v) => v switch
+    {
+        ArrayVal a when a.Rows * a.Cols > 1 || a.Rows * a.Cols == 0 => a.V,
+        RangeVal r when !r.Range.IsSingle => ToArray(r),
+        _ => null
+    };
+
     /// <summary>Reduces a formula result to one cell value (implicit intersection / top-left of arrays).</summary>
     internal CellValue Final(object v, Ctx ctx)
     {
@@ -176,10 +361,31 @@ public sealed class Calc
         return s.IsBlank ? CellValue.Number(0) : s;
     }
 
+    /// <summary>
+    /// Used area for clipping whole-column references. Spilled values count only for formulas that are not being
+    /// calculated right now: otherwise =A:A*2 would see its own previous result and grow at every recalculation.
+    /// </summary>
     internal CellRange UsedRange(Sheet s)
     {
-        if (!_usedCache.TryGetValue(s, out var u)) _usedCache[s] = u = s.UsedRange();
-        return u;
+        if (!_usedCache.TryGetValue(s, out var u))
+        {
+            int r1 = int.MaxValue, c1 = int.MaxValue, r2 = -1, c2 = -1;
+            var spills = new List<(Cell, CellRange)>();
+            foreach (var (k, cell) in s.Cells)
+            {
+                if (cell.SpillFrom != null) continue;
+                var (r, c) = Sheet.FromKey(k);
+                if (r < r1) r1 = r; if (r > r2) r2 = r; if (c < c1) c1 = c; if (c > c2) c2 = c;
+                if (cell.SpillRows > 0) spills.Add((cell, new CellRange(r, c, r + cell.SpillRows - 1, c + cell.SpillCols - 1)));
+            }
+            foreach (var m in s.Merges) { r2 = Math.Max(r2, m.R2); c2 = Math.Max(c2, m.C2); }
+            var data = r2 < 0 ? new CellRange(0, 0, 0, 0) : new CellRange(Math.Min(r1, r2), Math.Min(c1, c2), r2, c2);
+            _usedCache[s] = u = (data, spills);
+        }
+        var res = u.Data;
+        foreach (var (m, a) in u.Spills)
+            if (!_evaluating.Contains(m)) res = new CellRange(Math.Min(res.R1, a.R1), Math.Min(res.C1, a.C1), Math.Max(res.R2, a.R2), Math.Max(res.C2, a.C2));
+        return res;
     }
 
     // ------------------------------------------------------------------ expression evaluation
@@ -195,34 +401,91 @@ public sealed class Calc
             case MissingExpr: return CellValue.Blank;
             case ParenExpr p: return Eval(p.Inner, ctx);
             case ArrayExpr a: return new ArrayVal(a.Values);
+            case ValueExpr ve: return ve.Value;
             case RefExpr r:
             {
                 var sheet = r.Sheet == null ? ctx.Sheet : _wb.Sheet(r.Sheet) ?? throw new FormulaError(Errors.Ref);
+                if (r.Spill) return SpillRange(sheet, r.R1, r.C1);
                 return new RangeVal(sheet, r.Range);
             }
             case NameExpr nm: return EvalName(nm.Name, ctx);
             case UnaryExpr u:
             {
                 var v = Eval(u.Operand, ctx);
+                if (ctx.Implicit && v is RangeVal { Range.IsSingle: false }) v = ToScalar(v, ctx);
+                if (u.Op == '@') return v is CellValue or LambdaVal ? v : ToScalar(v, ctx);
                 return u.Op == '-' ? Lift1(v, ctx, x => CellValue.Number(-ToNum(x))) : Lift1(v, ctx, x => CellValue.Number(ToNum(x)));
             }
             case PercentExpr pc: return Lift1(Eval(pc.Operand, ctx), ctx, x => CellValue.Number(ToNum(x) / 100));
             case BinaryExpr b: return EvalBinary(b, ctx);
             case FuncExpr f:
             {
-                if (!Functions.Table.TryGetValue(f.Name, out var impl)) throw new FormulaError(Errors.Name);
-                try { return impl(ctx, f.Args); }
+                if (ctx.Scope?.Find(f.Name) is Expr local) return CallValue(Eval(local, ctx), f.Args, ctx);
+                if (!Functions.Table.TryGetValue(f.Name, out var impl))
+                {
+                    if (_wb.Names.ContainsKey(f.Name)) return CallValue(EvalName(f.Name, ctx), f.Args, ctx);
+                    throw new FormulaError(Errors.Name);
+                }
+                try { return Functions.Call(f.Name, impl, ctx.Implicit && ArrayFunctions.Contains(f.Name) ? ctx.ArrayMode() : ctx, f.Args); }
                 catch (FormulaError fe) { return CellValue.Error(fe.Code); }
                 catch (OverflowException) { return CellValue.Error(Errors.Num); }
                 catch (ArgumentOutOfRangeException) { return CellValue.Error(Errors.Value); }
                 catch (IndexOutOfRangeException) { return CellValue.Error(Errors.Value); }
             }
+            case CallExpr ce: return CallValue(Eval(ce.Callee, ctx), ce.Args, ctx);
         }
         throw new FormulaError(Errors.Value);
     }
 
+    /// <summary>f(args) where f evaluated to a function value.</summary>
+    private object CallValue(object fn, Expr[] args, Ctx ctx)
+    {
+        if (fn is CellValue { IsError: true } err) return err;
+        if (fn is not LambdaVal lam) return CellValue.Error(Errors.Value);
+        var vals = new Expr[args.Length];
+        for (int i = 0; i < args.Length; i++) vals[i] = args[i] is MissingExpr ? args[i] : new ValueExpr(Eval(args[i], ctx));
+        try { return Invoke(lam, vals, ctx); }
+        catch (FormulaError fe) { return CellValue.Error(fe.Code); }
+    }
+
+    /// <summary>Functions whose arguments are evaluated as arrays even in formulas without dynamic arrays.</summary>
+    private static readonly HashSet<string> ArrayFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUMPRODUCT", "MMULT", "MDETERM", "MINVERSE", "LOOKUP", "INDEX", "FREQUENCY", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "PROB",
+        "LINEST", "LOGEST", "TREND", "GROWTH", "AGGREGATE", "TRANSPOSE", "CORREL", "PEARSON", "COVAR", "COVARIANCE.P", "COVARIANCE.S", "RSQ",
+        "SLOPE", "INTERCEPT", "STEYX", "FORECAST", "FORECAST.LINEAR", "TTEST", "T.TEST", "CHITEST", "CHISQ.TEST", "FTEST", "F.TEST"
+    };
+
+    private int _lambdaDepth, _nameDepth;
+    private bool _lambdaAbort;
+
+    /// <summary>Calls a function value; arguments are <see cref="ValueExpr"/> (or <see cref="MissingExpr"/> for omitted ones).</summary>
+    internal object Invoke(LambdaVal f, Expr[] args, Ctx caller)
+    {
+        if (f.Builtin != null)
+        {
+            if (!Functions.Table.TryGetValue(f.Builtin, out var impl)) throw new FormulaError(Errors.Name);
+            return Functions.Call(f.Builtin, impl, caller, args);
+        }
+        if (args.Length > f.Params.Length) throw new FormulaError(Errors.Value);
+        var ctx = f.Closure!;
+        for (int i = 0; i < f.Params.Length; i++)
+        {
+            if (i >= args.Length && !f.Optional[i]) throw new FormulaError(Errors.Value);
+            ctx = ctx.Bind(f.Params[i], i < args.Length ? args[i] : new MissingExpr());
+        }
+        // runaway recursion: once the limit is hit every call fails until the stack has unwound (no exponential retries)
+        if (_lambdaAbort || _lambdaDepth >= 1000) { _lambdaAbort = true; throw new FormulaError(Errors.Num); }
+        _lambdaDepth++;
+        try { return Eval(f.Body!, ctx); }
+        finally { if (--_lambdaDepth == 0) _lambdaAbort = false; }
+    }
+
     private object EvalName(string name, Ctx ctx)
     {
+        if (ctx.Scope?.Find(name) is Expr local) return Eval(local, ctx);
+        if (!_wb.Names.ContainsKey(name) && Functions.Table.ContainsKey(name) && !name.Equals("TRUE", StringComparison.OrdinalIgnoreCase) && !name.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+            return new LambdaVal { Builtin = name.ToUpperInvariant() };
         if (!_nameCache.TryGetValue(name, out var expr))
         {
             expr = null;
@@ -233,7 +496,10 @@ public sealed class Calc
             _nameCache[name] = expr;
         }
         if (expr == null) throw new FormulaError(Errors.Name);
-        return Eval(expr, ctx);
+        if (_nameDepth >= 1000) throw new FormulaError(Errors.Num); // name defined through itself
+        _nameDepth++;
+        try { return Eval(expr, ctx.Root()); }
+        finally { _nameDepth--; }
     }
 
     public void InvalidateNames() => _nameCache.Clear();
@@ -242,6 +508,11 @@ public sealed class Calc
     {
         var l = Eval(b.Left, ctx);
         var r = Eval(b.Right, ctx);
+        if (ctx.Implicit)
+        {
+            if (l is RangeVal { Range.IsSingle: false }) l = ToScalar(l, ctx);
+            if (r is RangeVal { Range.IsSingle: false }) r = ToScalar(r, ctx);
+        }
         Func<CellValue, CellValue, CellValue> op = b.Op switch
         {
             "+" => (x, y) => CellValue.Number(ToNum(x) + ToNum(y)),
@@ -389,6 +660,7 @@ public sealed class Calc
         switch (v)
         {
             case CellValue s: return s;
+            case LambdaVal: return CellValue.Error(Errors.Calc);
             case ArrayVal a: return a.V.Length > 0 ? a.V[0, 0] : CellValue.Error(Errors.Value);
             case RangeVal r:
             {

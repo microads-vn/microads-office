@@ -76,6 +76,30 @@ public static class PdfUiTests
                 Ui.Click(Ui.Find<Button>(f.AiPane!, "btnAiClose"));
                 T.False(f.AiPane!.Visible, "hidden");
             });
+
+            r.Test("P04 a screenshot / picture file / browser image pasted or dropped on a PDF becomes an image stamp to place with a click", () =>
+            {
+                var saved = MicroadsOffice.TestShared.ClipTestUtil.Save();
+                try
+                {
+                    var v = f!.Current!;
+                    using (var shot = MicroadsOffice.TestShared.ClipTestUtil.TestImage()) MicroadsOffice.TestShared.ClipTestUtil.SetNativeDib(shot);
+                    T.True(f.PlaceImageFrom(MicroadsOffice.UI.DataTransfer.ReadClipboard()), "screenshot accepted");
+                    T.Eq(MicroadsOffice.Viewer.ViewerTool.PlaceStamp, v.Viewer.Tool);
+                    v.Viewer.SetTool(MicroadsOffice.Viewer.ViewerTool.Hand);
+                    var png = Path.Combine(T.Out, "dau-anh.png");
+                    using (var b = MicroadsOffice.TestShared.ClipTestUtil.TestImage(60, 60)) b.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+                    T.True(f.PlaceImageFrom(new DataObject(DataFormats.FileDrop, new[] { png })), "picture file accepted");
+                    T.Eq(MicroadsOffice.Viewer.ViewerTool.PlaceStamp, v.Viewer.Tool);
+                    v.Viewer.SetTool(MicroadsOffice.Viewer.ViewerTool.Hand);
+                    using (var b = MicroadsOffice.TestShared.ClipTestUtil.TestImage(40, 40))
+                        T.True(f.PlaceImageFrom(MicroadsOffice.TestShared.ClipTestUtil.VirtualFile("hinh.png", MicroadsOffice.TestShared.ClipTestUtil.Png(b))), "browser image accepted");
+                    v.Viewer.SetTool(MicroadsOffice.Viewer.ViewerTool.Hand);
+                    T.False(f.PlaceImageFrom(new DataObject(DataFormats.UnicodeText, "chỉ là chữ")), "text is not a picture");
+                    T.Eq(MicroadsOffice.Viewer.ViewerTool.Hand, v.Viewer.Tool);
+                }
+                finally { MicroadsOffice.TestShared.ClipTestUtil.Restore(saved); }
+            });
         }
         finally
         {

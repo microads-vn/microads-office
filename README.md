@@ -4,14 +4,14 @@
 Published by **Microads Technology Company Limited** (Công ty TNHH Công nghệ Microads), Ho Chi Minh City, Vietnam — [microads.vn](https://microads.vn).
 Always free, no account, Vietnamese and English user interface.
 
-[Download](https://microads.vn/office/) · [Code signing policy](CODE_SIGNING_POLICY.md) · [Privacy policy](https://microads.vn/office/privacy) · [License: GPL-3.0](LICENSE)
+[Download](https://microads.vn/office/en/) · [Blog](https://microads.vn/office/en/blog/) · [Free AI Excel formula generator](https://microads.vn/office/en/excel-formula-generator) · [Code signing policy](CODE_SIGNING_POLICY.md) · [Privacy policy](https://microads.vn/office/privacy) · [License: GPL-3.0](LICENSE)
 
 ## Features
 
 | App | What it does |
 |---|---|
 | **Microads Office Word** | Page-accurate word processor: styles, tables, images, headers/footers, table of contents, Vietnamese administrative document templates (Decree 30/2020), `.docx` / `.rtf` / `.txt` read & write, export to PDF, print |
-| **Microads Office Excel** | Spreadsheets with ~230 functions (incl. `DOCSO` — numbers to Vietnamese words), charts, conditional formatting, sort & filter, `.xlsx` / `.csv` read & write, print / PDF |
+| **Microads Office Excel** | Spreadsheets with 502 Excel functions (dynamic arrays, `XLOOKUP`, `LET`, `LAMBDA`, and `DOCSO` — numbers to Vietnamese words), charts, conditional formatting, sort & filter, `.xlsx` / `.csv` read & write, print / PDF |
 | **Microads Office PDF** | Fast PDF viewer (PDFium), digital signatures (PAdES / PKCS#7 with USB tokens or `.pfx`), signature verification, image stamps, print |
 | **AI assistant** (Word, Excel, PDF) | Side pane that drafts, rewrites, translates and proofreads straight into the document (one undo step), writes formulas / tables / charts into the sheet, summarises PDFs. Connect with **Continue with ChatGPT** (your ChatGPT Plus/Pro plan), a Claude or OpenAI API key, an OpenAI-compatible server (Ollama), or use your Claude Pro/Max plan from **Claude Desktop** through the built-in MCP server (`MicroadsOffice.exe --mcp`) |
 | **Hub & installer** | One self-contained executable; per-user installation without administrator rights; file associations; uninstaller; automatic updates verified with the Microads ECDSA release signature |

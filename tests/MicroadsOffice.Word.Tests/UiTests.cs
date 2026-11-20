@@ -1,3 +1,4 @@
+using MicroadsOffice.TestShared;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using MicroadsOffice.Core.Office;
@@ -473,6 +474,77 @@ public static class UiTests
                 tw.ShowBackstage("print"); Shot(tw, "word-backstage-print");
                 tw.Editor.MarkSaved();
                 tw.Close();
+            });
+
+            r.Test("UI16 Ctrl+V and drag & drop from other programs: screenshot (DIB / bitmap / PNG), files and folders, copy / cut a picture, browser image, HTML image", () =>
+            {
+                var saved = ClipTestUtil.Save();
+                var dir = Path.Combine(T.Out, "clip-src");
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Directory.CreateDirectory(Path.Combine(dir, "Thư mục con"));
+                var pngFile = Path.Combine(dir, "anh chup.png");
+                using (var b = ClipTestUtil.TestImage(200, 100, Color.IndianRed)) b.Save(pngFile, System.Drawing.Imaging.ImageFormat.Png);
+                var txtFile = Path.Combine(dir, "ghi chu.txt");
+                File.WriteAllText(txtFile, "x");
+                try
+                {
+                    w.HideBackstage();
+                    ed.Document = Document.CreateBlank();
+                    int Images() => ed.Document.Paragraphs.Sum(p => p.Runs.Count(x => x.Object is ImageObject));
+                    // PrtSc: Windows offers only a device-independent bitmap
+                    using (var shot = ClipTestUtil.TestImage()) ClipTestUtil.SetNativeDib(shot);
+                    ed.Paste(); Pump();
+                    T.Eq(1, Images(), "PrtSc (DIB) pasted as a picture");
+                    using (var shot = ClipTestUtil.TestImage(120, 60, Color.Olive)) ClipTestUtil.SetNativeBitmap(shot);
+                    ed.Paste(); Pump();
+                    T.Eq(2, Images(), "bitmap-only clipboard pasted");
+                    using (var shot = ClipTestUtil.TestImage(90, 90, Color.Teal)) ClipTestUtil.SetPngOnly(shot);
+                    ed.Paste(); Pump();
+                    T.Eq(3, Images(), "Snipping Tool / browser PNG pasted");
+                    // files and a folder copied in Explorer: the picture is inserted, the others become links (ONE undo step)
+                    ClipTestUtil.SetFiles(pngFile, txtFile, Path.Combine(dir, "Thư mục con"));
+                    ed.Paste(); Pump();
+                    T.Eq(4, Images(), "picture file pasted");
+                    var links = ed.Document.Paragraphs.SelectMany(p => p.Runs).Select(x => x.Props.Link).Where(l => l != null).Distinct().ToList();
+                    T.True(links.Any(l => l!.StartsWith("file:") && l.EndsWith("ghi%20chu.txt")) && links.Any(l => l!.Contains("Th%C6%B0%20m%E1%BB%A5c%20con") || l!.Contains("Thư mục con")), "file and folder links: " + string.Join(" | ", links));
+                    ed.Undo(); Pump();
+                    T.Eq(3, Images(), "files pasted as one undo step");
+                    T.False(ed.Document.Paragraphs.SelectMany(p => p.Runs).Any(x => x.Props.Link != null), "links undone too");
+                    // copy a picture: other programs get a picture (bitmap + PNG), never its placeholder character as text
+                    var at = ed.Document.Paragraphs.Select((p, i) => (p, i)).First(x => x.p.Runs.Any(rr => rr.Object is ImageObject));
+                    int off = 0; foreach (var rr in at.p.Runs) { if (rr.Object is ImageObject) break; off += rr.Length; }
+                    ed.Select(new DocPos(at.i, off), new DocPos(at.i, off + 1));
+                    T.True(ed.SelectedImage != null, "picture selected");
+                    ed.Copy();
+                    var cd = DataTransfer.ReadClipboard();
+                    T.True(DataTransfer.Picture(cd) != null && cd!.GetDataPresent("PNG"), "copied picture is on the clipboard as a picture");
+                    T.True(string.IsNullOrEmpty(DataTransfer.Text(cd)), "no placeholder text on the clipboard");
+                    ed.Cut(); Pump();
+                    T.Eq(2, Images(), "cut removes the picture");
+                    ed.Paste(); Pump();
+                    T.Eq(3, Images(), "cut picture pasted back");
+                    // a program that copies a picture with an empty RTF (MS Word / WordPad picture) → the picture
+                    var rtfPic = new DataObject();
+                    rtfPic.SetData(DataFormats.Rtf, "{\\rtf1\\ansi }");
+                    using (var b = ClipTestUtil.TestImage(50, 50)) rtfPic.SetImage(new Bitmap(b));
+                    T.True(ed.InsertData(rtfPic), "empty RTF + picture accepted");
+                    T.Eq(4, Images(), "picture taken when the RTF is empty");
+                    // drag & drop at the mouse position: text, a browser image (virtual file), an HTML data: image
+                    var pt = new Point(ed.ClientSize.Width / 2, 60);
+                    T.True(ed.DropData(new DataObject(DataFormats.UnicodeText, "Văn bản kéo thả"), pt), "text dropped");
+                    T.True(ed.Document.PlainText.Contains("Văn bản kéo thả"), "dropped text inserted");
+                    using (var b = ClipTestUtil.TestImage(70, 40, Color.Purple))
+                    {
+                        T.True(ed.DropData(ClipTestUtil.VirtualFile("hinh.png", ClipTestUtil.Png(b)), pt), "browser image dropped");
+                        T.Eq(5, Images(), "virtual file inserted as a picture");
+                        T.True(ed.DropData(ClipTestUtil.HtmlWithImage(ClipTestUtil.Png(b)), pt), "HTML image dropped");
+                        T.Eq(6, Images(), "data: image from HTML inserted");
+                    }
+                    // nothing usable → nothing happens
+                    T.False(ed.InsertData(new DataObject("Unknown/Format", "x")), "unknown data ignored");
+                    ed.MarkSaved();
+                }
+                finally { ClipTestUtil.Restore(saved); }
             });
         }
         finally

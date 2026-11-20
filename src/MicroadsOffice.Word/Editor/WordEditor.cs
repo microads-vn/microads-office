@@ -621,12 +621,14 @@ public sealed class WordEditor : ScrollableControl
         _clipToken = Guid.NewGuid().ToString("N");
         var frag = new Document { Blocks = blocks.Select(b => b.CloneBlock()).ToList(), Styles = _doc.Styles };
         var data = new DataObject();
-        data.SetText(SelectedText.Replace("\n", Environment.NewLine), TextDataFormat.UnicodeText);
+        // a picture's placeholder character must never reach other programs as "text" (Excel, chat apps would paste it instead of the picture)
+        var text = SelectedText.Replace(Run.ObjectChar.ToString(), "").Replace("\n", Environment.NewLine);
+        if (text.Length > 0) data.SetText(text, TextDataFormat.UnicodeText);
         try { data.SetData(DataFormats.Rtf, RtfWriter.Write(frag)); } catch { }
         try { data.SetData(DataFormats.Html, HtmlWriter.ClipboardHtml(frag)); } catch { }
         data.SetData(ClipFormat, _clipToken);
-        if (_selImage != null) try { data.SetImage(new Bitmap(_selImage.Image)); } catch { }
-        try { Clipboard.SetDataObject(data, true, 5, 100); } catch (ExternalException) { }
+        if (_selImage != null) DataTransfer.PutImage(data, _selImage.Image);
+        DataTransfer.WriteClipboard(data);
     }
 
     public void Cut()
@@ -636,73 +638,110 @@ public sealed class WordEditor : ScrollableControl
         DeleteSelection();
     }
 
-    public void Paste(bool textOnly = false)
+    /// <summary>Ctrl+V: Microads Word content, RTF, files from Explorer, a picture (screenshot, copied image) or text.</summary>
+    public void Paste(bool textOnly = false) => InsertData(DataTransfer.ReadClipboard(), textOnly, fromClipboard: true);
+
+    /// <summary>
+    /// Inserts copied or dragged data at the caret as ONE undo step. Order: our own fragment, files and folders (pictures are
+    /// inserted, other files and folders become links), formatted text (RTF), a picture, plain text. Returns false when
+    /// there was nothing usable.
+    /// </summary>
+    public bool InsertData(IDataObject? data, bool textOnly = false, bool fromClipboard = false)
     {
-        IDataObject? data;
-        try { data = Clipboard.GetDataObject(); } catch { return; }
-        if (data == null) return;
-        if (!textOnly && data.GetDataPresent(ClipFormat) && data.GetData(ClipFormat) as string == _clipToken && _clipBlocks != null)
+        if (data == null) return false;
+        if (fromClipboard && !textOnly && _clipBlocks != null && data.GetDataPresent(ClipFormat) && data.GetData(ClipFormat) as string == _clipToken)
         {
-            var blocks = _clipBlocks;
-            Edit("paste", () =>
-            {
-                var pos = HasSelection ? Editing.Delete(_doc, SelStart, SelEnd) : _caret;
-                _anchor = _caret = Editing.PasteBlocks(_doc, pos, blocks);
-            });
-            return;
+            PasteBlocksEdit(_clipBlocks);
+            return true;
         }
-        if (!textOnly && data.GetDataPresent(DataFormats.Rtf) && data.GetData(DataFormats.Rtf) is string rtf && rtf.Length > 0)
+        if (!textOnly)
         {
-            try
+            var files = DataTransfer.Files(data);
+            if (files.Length > 0) { InsertFiles(files); return true; }
+            if (data.GetDataPresent(DataFormats.Rtf) && data.GetData(DataFormats.Rtf) is string rtf && rtf.Length > 0)
             {
-                var d = RtfReader.Read(rtf);
-                var blocks = d.Blocks;
-                if (blocks.Count > 0)
+                try
                 {
-                    Edit("paste", () =>
-                    {
-                        var pos = HasSelection ? Editing.Delete(_doc, SelStart, SelEnd) : _caret;
-                        _anchor = _caret = Editing.PasteBlocks(_doc, pos, blocks);
-                    });
-                    return;
+                    var blocks = RtfReader.Read(rtf).Blocks;
+                    // an RTF without anything in it (programs that copy only a picture) falls through to the picture
+                    if (blocks.Any(b => b is Table || (b is Paragraph p && p.Length > 0))) { PasteBlocksEdit(blocks); return true; }
                 }
+                catch { }
             }
-            catch { }
+            if (DataTransfer.Picture(data) is { } pic) { InsertImage(pic.Bytes, pic.Ext); return true; }
         }
-        if (!textOnly && (data.GetDataPresent(DataFormats.Bitmap) || data.GetDataPresent(DataFormats.FileDrop)))
-        {
-            if (data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0 && IsImageFile(files[0]))
-            {
-                InsertImageFile(files[0]);
-                return;
-            }
-            if (data.GetData(DataFormats.Bitmap) is Image bmp)
-            {
-                using var ms = new MemoryStream();
-                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                InsertImage(ms.ToArray(), "png");
-                return;
-            }
-        }
-        if (data.GetDataPresent(DataFormats.UnicodeText) && data.GetData(DataFormats.UnicodeText) is string text)
-            InsertText(text, "paste");
-        else if (data.GetDataPresent(DataFormats.Text) && data.GetData(DataFormats.Text) is string t2)
-            InsertText(t2, "paste");
+        var text = DataTransfer.Text(data);
+        if (string.IsNullOrEmpty(text)) return false;
+        InsertText(text, "paste");
+        return true;
     }
 
-    public static bool IsImageFile(string f) => new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp" }.Contains(Path.GetExtension(f).ToLowerInvariant());
-
-    public void InsertImageFile(string path) => InsertImage(File.ReadAllBytes(path), Path.GetExtension(path));
-
-    public void InsertImage(byte[] data, string ext)
+    private void PasteBlocksEdit(List<Block> blocks) => Edit("paste", () =>
     {
-        var img = new ImageObject(data, ext);
+        var pos = HasSelection ? Editing.Delete(_doc, SelStart, SelEnd) : _caret;
+        _anchor = _caret = Editing.PasteBlocks(_doc, pos, blocks);
+    });
+
+    /// <summary>Files and folders from Explorer as ONE undo step: pictures are inserted, every other file or folder becomes a link (Ctrl+click shows it in Explorer).</summary>
+    public void InsertFiles(IReadOnlyList<string> files)
+    {
+        var items = new List<object>();
+        foreach (var f in files)
+        {
+            if (DataTransfer.IsImageFile(f) && DataTransfer.ImageFiles([f]).FirstOrDefault() is { } img) items.Add(FitImage(new ImageObject(img.Bytes, img.Ext)));
+            else items.Add(f);
+        }
+        if (items.Count == 0) return;
+        var props = TypingProps with { Link = null };
+        Edit("paste", () =>
+        {
+            var pos = HasSelection ? Editing.Delete(_doc, SelStart, SelEnd) : _caret;
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (i > 0) pos = Editing.SplitParagraph(_doc, pos);
+                pos = items[i] is ImageObject io
+                    ? Editing.InsertObject(_doc, pos, io, props)
+                    : Editing.InsertText(_doc, pos, (string)items[i], props with { Link = new Uri((string)items[i]).AbsoluteUri, Color = Color.FromArgb(5, 99, 193), Underline = UnderlineStyle.Single });
+            }
+            _anchor = _caret = pos;
+            _pending = null;
+        });
+    }
+
+    /// <summary>Moves the caret under the mouse while something is dragged over the page (shows where it will land).</summary>
+    public void ShowDropCaret(Point client)
+    {
+        var (page, pt) = ClientToPage(client);
+        var pos = _layout.HitTest(page, pt);
+        if (pos != _caret || HasSelection) Select(pos, pos);
+    }
+
+    /// <summary>Drops dragged data (text, formatted text, a picture, files) at the point under the mouse.</summary>
+    public bool DropData(IDataObject? data, Point client)
+    {
+        ShowDropCaret(client);
+        Focus();
+        return InsertData(data);
+    }
+
+    public static bool IsImageFile(string f) => DataTransfer.IsImageFile(f);
+
+    public void InsertImageFile(string path)
+    {
+        if (DataTransfer.ImageFiles([path]).FirstOrDefault() is { } img) InsertImage(img.Bytes, img.Ext);
+    }
+
+    public void InsertImage(byte[] data, string ext) => InsertObject(FitImage(new ImageObject(data, ext)));
+
+    /// <summary>Scales a new picture down to the column / page it goes into.</summary>
+    private ImageObject FitImage(ImageObject img)
+    {
         float maxW = _doc.Page.ContentWidth;
         var cell = CurrentCell;
         if (cell?.Row?.Table is Table t) maxW = Math.Max(30, t.ColumnWidths.Skip(t.GridColumnOf(cell.Row, cell)).Take(Math.Max(1, cell.GridSpan)).Sum() - 2 * DocLayout.CellPad);
         if (img.Width > maxW) { float k = maxW / img.Width; img.Width *= k; img.Height *= k; }
         if (img.Height > _doc.Page.ContentHeight * 0.9f) { float k = _doc.Page.ContentHeight * 0.9f / img.Height; img.Width *= k; img.Height *= k; }
-        InsertObject(img);
+        return img;
     }
 
     public void ResizeSelectedImage(float w, float h)
@@ -1036,6 +1075,17 @@ public sealed class WordEditor : ScrollableControl
 
     public static void OpenLink(string url)
     {
+        // links to files / folders (pasted from Explorer): show them in Explorer; a document link never runs a program
+        if (url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(url, UriKind.Absolute, out var fu) && fu.IsFile)
+        {
+            try
+            {
+                if (Directory.Exists(fu.LocalPath)) Process.Start(new ProcessStartInfo("explorer.exe", "\"" + fu.LocalPath + "\"") { UseShellExecute = false });
+                else if (File.Exists(fu.LocalPath)) Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + fu.LocalPath + "\"") { UseShellExecute = false });
+            }
+            catch { }
+            return;
+        }
         if (!(url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))) return;
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }

@@ -32,10 +32,30 @@ Giao diện Partner Center thực tế (11/2026) khác vài chỗ so với các 
 | System requirements | Chỉ tích Keyboard + Mouse ở cột **Recommended**; cột Minimum để trống |
 | Age ratings (IARC) | All Other App Types; Online Content **Yes** (nội dung AI); mọi câu khác **No**; "ratings board / physical media" No → Everyone / PEGI 3 / 3+; tích đồng ý điều khoản IARC |
 | Store listing languages | Tự nhận vi-VN và en-US từ gói (không cần Add/remove) |
-| Search terms | Tên ô là **Keywords** (Enter sau mỗi từ, ≤7, ≤21 chữ). Không dùng "word"/"excel" (nhãn hiệu Microsoft). VI: office, soạn thảo văn bản, bảng tính, ký số PDF, đọc PDF, docx xlsx, trợ lý AI. EN: office suite, word processor, spreadsheet, PDF signature, PDF reader, docx xlsx, AI assistant |
+| Search terms | Tên ô là **Keywords** (Enter sau mỗi từ, ≤7, ≤21 chữ). **Không dùng tên sản phẩm của hãng khác** — kể cả "office", "word", "excel", "reader" (lần nộp 19/11/2026 bị từ chối theo chính sách **10.1.3 Search Terms** vì "office", "office suite", "word processor", "PDF reader"). VI: văn phòng miễn phí, soạn thảo văn bản, bảng tính, ký số PDF, chữ ký số, docx xlsx, trợ lý AI. EN: document editor, spreadsheet, PDF signing, digital signature, Vietnamese, docx xlsx, AI assistant |
 | Short description | VI: "Bộ ứng dụng văn phòng miễn phí: soạn thảo văn bản, bảng tính, đọc và ký số PDF, kèm Trợ lý AI (ChatGPT, Claude). Giao diện tiếng Việt, mở và lưu tệp .docx, .xlsx." EN: "Free office suite: word processing, spreadsheets, PDF reading and digital signing, with an optional AI assistant (ChatGPT, Claude). Opens and saves .docx and .xlsx files." |
 | Notes for certification | Đã chuyển sang trang **Supplemental info › Additional Testing Information** (ô Description, bấm **Save description** ở đầu trang; Credentials để trống) |
 | runFullTrust | Ô "Why do you need the runFullTrust capability…" trong Submission options |
+
+## Cập nhật phiên bản mới (không phải điền lại hồ sơ)
+
+Mỗi bản mới chỉ cần: **tải gói .msix mới** và sửa ô **What's new** (2 ngôn ngữ). Mọi thông tin khác (giá, thuộc tính, độ tuổi,
+mô tả, ảnh, từ khóa, giải trình runFullTrust, ghi chú kiểm duyệt) được Partner Center **tự chép** từ lần nộp trước.
+
+- Hồ sơ trước **đã phát hành**: Application overview › **Update** (tạo Submission mới) › **Packages**: xóa gói cũ, kéo gói mới
+  → Validated › **Store listings** › từng ngôn ngữ: sửa **What's new** › **Submit for certification**.
+- Hồ sơ trước **đang kiểm duyệt** (In certification): Partner Center không cho tạo hồ sơ mới. Hoặc chờ duyệt xong rồi Update như trên,
+  hoặc bấm **Cancel certification** trên trang trạng thái → hồ sơ về nháp → Packages: thay gói → sửa What's new → Submit lại
+  (thời gian duyệt tính lại từ đầu).
+
+**What's new — 2.0.4** (VI):
+```
+Excel có 502 hàm — đủ các nhóm như Excel 365 (thống kê, tài chính, kỹ thuật, cơ sở dữ liệu…), mảng động tràn ô (FILTER, SORT, UNIQUE, XLOOKUP…), LET, LAMBDA, GROUPBY, PIVOTBY; tệp lưu ra mở đúng trong Excel 365. Dán và kéo thả chuẩn như Microsoft Office: dán ảnh chụp màn hình, sao chép/cắt ảnh sang Zalo, Paint; dán tệp từ Explorer; kéo ảnh, chữ từ trình duyệt vào Word, Excel, PDF. Sửa lỗi dán bảng trong Word và cột "####" khi Trợ lý AI tự vừa cột.
+```
+**What's new — 2.0.4** (EN):
+```
+Excel now has 502 functions covering every Excel 365 category (statistical, financial, engineering, database…), dynamic arrays (FILTER, SORT, UNIQUE, XLOOKUP spill), LET, LAMBDA, GROUPBY and PIVOTBY; saved files open correctly in Excel 365. Paste and drag & drop like Microsoft Office: screenshots, pictures to other apps, files from Explorer, pictures and text from browsers into Word, Excel and PDF. Fixes pasting tables in Word and "####" columns after AI autofit.
+```
 
 ## Bước 2 — Tạo hồ sơ nộp (Start submission)
 
@@ -114,7 +134,7 @@ Nếu bị trả về: chụp màn hình báo cáo lỗi (Certification report) 
 Microads Office — bộ ứng dụng văn phòng miễn phí cho Windows: soạn thảo văn bản (Word), bảng tính (Excel) và đọc, ký số PDF trong một lần cài. Giao diện tiếng Việt và tiếng Anh, không cần tài khoản, không quảng cáo theo dõi.
 
 • Microads Office Word: soạn văn bản theo đúng trang in, kiểu Tiêu đề, bảng, hình ảnh, đầu/chân trang, mục lục, mẫu văn bản hành chính theo Nghị định 30/2020/NĐ-CP; mở và lưu .docx, .rtf, .txt; xuất PDF; in.
-• Microads Office Excel: hơn 230 hàm (có DOCSO đọc số thành chữ), biểu đồ, định dạng có điều kiện, sắp xếp và lọc; mở và lưu .xlsx, .csv; in và xuất PDF.
+• Microads Office Excel: hơn 500 hàm như Excel 365, mảng động FILTER/SORT/UNIQUE, LET, LAMBDA (có DOCSO đọc số thành chữ), biểu đồ, định dạng có điều kiện, sắp xếp và lọc; mở và lưu .xlsx, .csv; in và xuất PDF.
 • Microads Office PDF: đọc PDF nhanh, ký số bằng USB Token hoặc tệp .pfx (PAdES), kiểm tra chữ ký, chèn dấu ảnh, in.
 
 Trợ lý AI (tùy chọn) — dùng AI tạo sinh: soạn, viết lại, dịch, sửa chính tả ngay trong văn bản; viết công thức, tạo bảng và biểu đồ trong trang tính; tóm tắt và hỏi đáp tệp PDF. Mỗi thay đổi đều hoàn tác được (Ctrl+Z). Trợ lý chỉ hoạt động khi bạn tự kết nối một dịch vụ AI của mình: tài khoản ChatGPT Plus/Pro (Continue with ChatGPT), khóa API Claude hoặc OpenAI, máy chủ AI riêng như Ollama, hoặc dùng gói Claude Pro/Max qua ứng dụng Claude Desktop. Nội dung chỉ được gửi tới dịch vụ bạn chọn khi bạn bấm Gửi; câu trả lời do AI tạo có thể chưa chính xác — hãy kiểm tra lại. Mỗi câu trả lời có nút Báo cáo để gửi nội dung không phù hợp cho Microads.
@@ -131,7 +151,7 @@ Phiên bản đầu tiên trên Microsoft Store: Trợ lý AI trong Word, Excel 
 ```
 Soạn thảo văn bản theo trang in thật, mở/lưu .docx
 Mẫu văn bản hành chính theo Nghị định 30/2020/NĐ-CP
-Bảng tính hơn 230 hàm, biểu đồ, lọc và sắp xếp, mở/lưu .xlsx
+Bảng tính hơn 500 hàm, mảng động, biểu đồ, lọc và sắp xếp, mở/lưu .xlsx
 Hàm DOCSO đọc số thành chữ tiếng Việt
 Đọc PDF, ký số bằng USB Token hoặc .pfx, kiểm tra chữ ký
 Trợ lý AI: soạn, viết lại, dịch, sửa chính tả ngay trong văn bản
@@ -141,7 +161,7 @@ Giao diện tiếng Việt và tiếng Anh
 Miễn phí, không cần tài khoản
 ```
 
-**Từ khóa** (Keywords, tối đa 7): `văn phòng`, `soạn thảo văn bản`, `bảng tính`, `ký số PDF`, `docx xlsx`, `trợ lý AI`, `miễn phí`
+**Từ khóa** (Keywords, tối đa 7): `văn phòng miễn phí`, `soạn thảo văn bản`, `bảng tính`, `ký số PDF`, `chữ ký số`, `docx xlsx`, `trợ lý AI`
 
 **Bản quyền** (Copyright and trademark info): `© 2026 Công ty TNHH Công nghệ Microads`
 
@@ -183,6 +203,6 @@ Vietnamese and English interface
 Free, no account needed
 ```
 
-**Keywords**: `office suite`, `word processor`, `spreadsheet`, `PDF signature`, `docx xlsx`, `AI assistant`, `free`
+**Keywords**: `document editor`, `spreadsheet`, `PDF signing`, `digital signature`, `Vietnamese`, `docx xlsx`, `AI assistant`
 
 **Copyright**: `© 2026 Microads Technology Company Limited` · **Developed by**: `Microads Technology Company Limited`

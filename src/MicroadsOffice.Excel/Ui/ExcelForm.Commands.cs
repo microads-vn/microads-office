@@ -580,6 +580,7 @@ public sealed partial class ExcelForm
         if (!Guard()) return;
         var r = S.Filter?.Range is CellRange fr && fr.Contains(Grid.Active.Row, Grid.Active.Col) ? fr : DataRegion();
         bool header = S.Filter != null || LooksLikeHeader(r);
+        if (SheetOps.TouchesSpill(S, r)) { Ux.Error(this, SheetOps.SpillSortMessage); return; }
         _doc.Checkpoint(Loc.T("Sắp xếp", "Sort"));
         SheetOps.Sort(S, r, [new SheetOps.SortKey(Grid.Active.Col, asc)], header);
         if (S.Filter != null) SheetOps.ApplyFilter(S);
@@ -590,6 +591,7 @@ public sealed partial class ExcelForm
     {
         if (!Guard()) return;
         var r = S.Filter?.Range ?? DataRegion();
+        if (SheetOps.TouchesSpill(S, r)) { Ux.Error(this, SheetOps.SpillSortMessage); return; }
         using var d = new SortDialog(S, r, S.Filter != null || LooksLikeHeader(r));
         if (Ux.Show(d, this) != DialogResult.OK) return;
         _doc.Checkpoint(Loc.T("Sắp xếp", "Sort"));
@@ -648,8 +650,10 @@ public sealed partial class ExcelForm
         var popup = new FilterPopup(values.ToList(), allowed, cond);
         popup.SortRequested += asc =>
         {
+            var sr = f.Range with { R2 = Math.Max(f.Range.R2, used.R2) };
+            if (SheetOps.TouchesSpill(S, sr)) { Ux.Error(this, SheetOps.SpillSortMessage); return; }
             _doc.Checkpoint(Loc.T("Sắp xếp", "Sort"));
-            SheetOps.Sort(S, f.Range with { R2 = Math.Max(f.Range.R2, used.R2) }, [new SheetOps.SortKey(col, asc)], true);
+            SheetOps.Sort(S, sr, [new SheetOps.SortKey(col, asc)], true);
             SheetOps.ApplyFilter(S);
             Changed();
         };

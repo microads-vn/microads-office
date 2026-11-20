@@ -19,6 +19,8 @@ public sealed class ClipData
     public bool IsCut;
     public Dictionary<int, double> ColWidths = new();
     public Workbook? SourceBook;
+    /// <summary>Offsets of values spilled by a formula that is copied too: pasting formulas leaves them empty so the formula can spill again.</summary>
+    public HashSet<(int, int)> SpillChildren = new();
 }
 
 /// <summary>Structural and data operations on sheets (all keep formulas consistent).</summary>
@@ -167,6 +169,7 @@ public static class SheetOps
             var copy = cell.Clone();
             copy.StyleId = d.Styles.Intern(s.Book.Styles[cell.StyleId]);
             d.Cells[(row - d.Range.R1, col - d.Range.C1)] = copy;
+            if (s.SpillSource(row, col) is var (mr, mc, _) && d.Range.Contains(mr, mc)) d.SpillChildren.Add((row - d.Range.R1, col - d.Range.C1));
         }
         d.Merges = s.Merges.Where(m => d.Range.Contains(m)).Select(m => new CellRange(m.R1 - d.Range.R1, m.C1 - d.Range.C1, m.R2 - d.Range.R1, m.C2 - d.Range.C1)).ToList();
         for (int c = d.Range.C1; c <= d.Range.C2 && c < d.Range.C1 + 200; c++) if (s.ColWidths.TryGetValue(c, out var w)) d.ColWidths[c - d.Range.C1] = w;
@@ -202,12 +205,18 @@ public static class SheetOps
                     if (skipBlanks && src.Value.IsBlank && src.Formula == null) continue;
                     var cell = s.GetOrCreate(row, col);
                     int offR = row - (d.Range.R1 + dr), offC = col - (d.Range.C1 + dc);
-                    if (mode is PasteMode.All or PasteMode.Formulas)
+                    if (mode is not PasteMode.Formats) s.ForgetSpill(row, col, cell);
+                    if (mode is PasteMode.All or PasteMode.Formulas && d.SpillChildren.Contains((dr, dc)))
+                    {
+                        cell.Formula = null; cell.Ast = null; cell.Value = CellValue.Blank;
+                    }
+                    else if (mode is PasteMode.All or PasteMode.Formulas)
                     {
                         if (src.Formula != null)
                         {
                             cell.Formula = d.IsCut ? src.Formula : RefAdjust.Shift(src.Formula, offR, offC);
                             cell.Ast = null; cell.Value = src.Value;
+                            cell.Implicit = src.Implicit; // a copied formula from an older file keeps its "@" behaviour
                         }
                         else { cell.Formula = null; cell.Ast = null; cell.Value = src.Value; }
                     }
@@ -425,8 +434,25 @@ public static class SheetOps
     public sealed record SortKey(int Col, bool Ascending = true);
 
     /// <summary>Sorts the rows of <paramref name="r"/> (header row excluded when <paramref name="hasHeader"/>).</summary>
+    /// <summary>The range contains a dynamic-array formula or its spilled values (Excel refuses to sort those).</summary>
+    public static bool TouchesSpill(Sheet s, CellRange r)
+    {
+        foreach (var (k, cell) in s.Cells)
+        {
+            if (cell.SpillRows <= 0 && cell.SpillFrom == null) continue;
+            var (row, col) = Sheet.FromKey(k);
+            if (r.Contains(row, col)) return true;
+        }
+        return false;
+    }
+
+    public static string SpillSortMessage => MicroadsOffice.Core.Office.Loc.T(
+        "Không sắp xếp được: vùng này chứa kết quả tràn của công thức mảng động (FILTER, SORT, UNIQUE…). Hãy sắp xếp dữ liệu nguồn hoặc dùng hàm SORT.",
+        "Can't sort: the range contains the spilled result of a dynamic-array formula (FILTER, SORT, UNIQUE…). Sort the source data or use the SORT function.");
+
     public static void Sort(Sheet s, CellRange r, IReadOnlyList<SortKey> keys, bool hasHeader)
     {
+        if (TouchesSpill(s, r)) throw new InvalidOperationException(SpillSortMessage);
         int start = hasHeader ? r.R1 + 1 : r.R1;
         if (start > r.R2) return;
         var used = s.UsedRange();

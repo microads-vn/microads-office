@@ -183,11 +183,17 @@ public sealed partial class MainForm : Form, IOfficeAppWindow
         Controls.Add(_status);
         Controls.Add(_ribbon);
 
-        DragEnter += (_, e) => { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
+        // PDFs open; a picture (file, screenshot, image dragged from a browser or chat app) goes onto the open page as an image stamp
+        DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true || (Current != null && DataTransfer.HasContent(e.Data)) ? DragDropEffects.Copy : DragDropEffects.None;
+        DragOver += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true || (Current != null && DataTransfer.HasContent(e.Data)) ? DragDropEffects.Copy : DragDropEffects.None;
         DragDrop += (_, e) =>
         {
-            if (e.Data?.GetData(DataFormats.FileDrop) is string[] dropped)
-                foreach (var f in dropped.Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))) OpenFile(f);
+            var files = DataTransfer.Files(e.Data);
+            var pdfs = files.Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) && File.Exists(f)).ToList();
+            foreach (var f in pdfs) OpenFile(f);
+            if (pdfs.Count > 0) return;
+            if (!PlaceImageFrom(e.Data) && (files.Length > 0 || DataTransfer.Picture(e.Data) == null))
+                SetStatus(Loc.T("Chỉ mở được tệp PDF; ảnh được chèn vào trang PDF đang mở.", "Only PDF files can be opened; pictures are inserted into the open PDF page."));
         };
         Load += (_, _) =>
         {

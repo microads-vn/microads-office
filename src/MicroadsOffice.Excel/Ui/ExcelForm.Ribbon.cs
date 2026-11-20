@@ -376,7 +376,27 @@ public sealed partial class ExcelForm
         }
         g.Stack(FnMenu("btnFnFinancial", FnCategory.Financial, "currency", "Tài chính", "Financial"), FnMenu("btnFnLogical", FnCategory.Logical, "validation", "Logic", "Logical"), FnMenu("btnFnText", FnCategory.Text, "fontColor", "Văn bản", "Text"));
         g.Stack(FnMenu("btnFnDate", FnCategory.DateTime, "calc", "Ngày & giờ", "Date & Time"), FnMenu("btnFnLookup", FnCategory.Lookup, "find", "Tra cứu", "Lookup & Reference"), FnMenu("btnFnMath", FnCategory.Math, "sum", "Toán học", "Math & Trig"));
-        g.Stack(FnMenu("btnFnStat", FnCategory.Statistical, "colChart", "Thống kê", "Statistical"), FnMenu("btnFnInfo", FnCategory.Information, "note", "Thông tin", "Information"));
+        RibbonButton MoreFnMenu()
+        {
+            var b = B("btnFnMore", "Hàm khác", "More Functions", XlIcons.Small("calc"), "Hàm khác: Kỹ thuật, Cơ sở dữ liệu, Tương thích, Web", "More functions: Engineering, Database, Compatibility, Web", () => { }, RibbonButtonSize.Small);
+            var subs = new List<ToolStripItem>();
+            foreach (var (cat, vi, en) in new[] { (FnCategory.Engineering, "Kỹ thuật", "Engineering"), (FnCategory.Database, "Cơ sở dữ liệu", "Database"), (FnCategory.Compatibility, "Tương thích", "Compatibility"), (FnCategory.Web, "Web", "Web") })
+            {
+                var fns = FunctionCatalog.All.Where(f => f.Category == cat).OrderBy(f => f.Name).ToList();
+                if (fns.Count == 0) continue;
+                var sub = new ToolStripMenuItem(Loc.T(vi, en)) { Name = "miFnCat" + cat };
+                foreach (var f in fns)
+                {
+                    var it = new ToolStripMenuItem(f.Name, null, (_, _) => InsertFunctionCall(f.Name)) { Name = "miFn" + f.Name, ToolTipText = f.Signature + "\n" + f.Description };
+                    sub.DropDownItems.Add(it);
+                    _menuItems.Add(it);
+                }
+                subs.Add(sub);
+            }
+            b.DropDown = Menu(subs.ToArray());
+            return b;
+        }
+        g.Stack(FnMenu("btnFnStat", FnCategory.Statistical, "colChart", "Thống kê", "Statistical"), FnMenu("btnFnInfo", FnCategory.Information, "note", "Thông tin", "Information"), MoreFnMenu());
         g = formulas.AddGroup("DefinedNames", Loc.T("Tên đã định nghĩa", "Defined Names"));
         g.Large(B("btnNameManager", "Quản lý\ntên", "Name\nManager", XlIcons.Large("names"), "Tạo, sửa, xóa tên", "Create, edit and delete names", CmdNameManager, RibbonButtonSize.Large));
         var useName = B("btnUseInFormula", "Dùng trong công thức", "Use in Formula", XlIcons.Small("names"), "Chèn tên vào công thức", "Insert a name into the formula", () => { }, RibbonButtonSize.Small);

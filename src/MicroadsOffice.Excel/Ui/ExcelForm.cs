@@ -99,6 +99,22 @@ public sealed partial class ExcelForm : Form, IOfficeAppWindow
 
         DragEnter += (_, e) => { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] f) OpenFiles(f, false); };
+        // the sheet accepts what other programs drag: text, pictures (browser, chat app, Paint), files and folders
+        Grid.AllowDrop = true;
+        Grid.DragEnter += (_, e) => e.Effect = DataTransfer.HasContent(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        Grid.DragOver += (_, e) => e.Effect = DataTransfer.HasContent(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        Grid.DragDrop += (_, e) =>
+        {
+            if (e.Data == null) return;
+            var pt = Grid.PointToClient(new Point(e.X, e.Y));
+            var files = DataTransfer.Files(e.Data);
+            if (files.Length == 0) { Grid.DropData(e.Data, pt); return; }
+            // workbooks / documents open in their app; pictures and any other file or folder go into the sheet
+            var docs = files.Where(f => File.Exists(f) && !DataTransfer.IsImageFile(f) && Product.KindForFile(f) != null).ToList();
+            var rest = files.Except(docs).ToArray();
+            if (rest.Length > 0) Grid.DropData(new DataObject(DataFormats.FileDrop, rest), pt);
+            if (docs.Count > 0) OpenFiles(docs, false);
+        };
         FormClosing += OnFormClosing;
         _autoRecover.Tick += (_, _) => AutoRecoverTick();
         _autoRecover.Start();
@@ -328,7 +344,11 @@ public sealed partial class ExcelForm : Form, IOfficeAppWindow
             var a = Grid.Active;
             var cell = _doc.Sheet.GetCell(a.Row, a.Col);
             var st = _doc.Sheet.StyleAt(a.Row, a.Col);
-            _formula.Text = _doc.Sheet.Protected && st.HiddenFormula ? "" : GridView.EditableText(cell, st);
+            // a value spilled by a dynamic-array formula shows that formula greyed out, like Excel
+            var src = _doc.Sheet.SpillSource(a.Row, a.Col);
+            _formula.ForeColor = src != null ? SystemColors.GrayText : SystemColors.WindowText;
+            if (src is var (_, _, master) && !(_doc.Sheet.Protected && st.HiddenFormula)) _formula.Text = "=" + master.Formula;
+            else _formula.Text = _doc.Sheet.Protected && st.HiddenFormula ? "" : GridView.EditableText(cell, st);
         }
         _updating = false;
     }

@@ -228,6 +228,11 @@ public static partial class Functions
         RegisterDate();
         RegisterFinance();
         RegisterInfo();
+        RegisterFin();
+        RegisterDist();
+        RegisterEng();
+        RegisterMisc();
+        RegisterDyn();
     }
 
     // ================================================================== MATH
@@ -793,20 +798,8 @@ public static partial class Functions
             for (int i = 0; i < a.Length; i += 2) if (c.Bool(a[i])) return c.Eval(a[i + 1]);
             throw Err(Errors.NA);
         }, "IFS");
-        Reg((c, a) =>
-        {
-            Args(a, 2, 2);
-            var v = c.Eval(a[0]);
-            var s = v is CellValue cv ? cv : c.Calc.ToScalar(v, c);
-            return s.IsError ? c.Eval(a[1]) : v;
-        }, "IFERROR");
-        Reg((c, a) =>
-        {
-            Args(a, 2, 2);
-            var v = c.Eval(a[0]);
-            var s = c.Calc.ToScalar(v, c);
-            return s.IsError && s.Str == Errors.NA ? c.Eval(a[1]) : v;
-        }, "IFNA");
+        Reg((c, a) => IfError(c, a, onlyNa: false), "IFERROR");
+        Reg((c, a) => IfError(c, a, onlyNa: true), "IFNA");
         Reg((c, a) => B(Logicals(c, a).All(x => x)), "AND");
         Reg((c, a) => B(Logicals(c, a).Any(x => x)), "OR");
         Reg((c, a) => B(Logicals(c, a).Count(x => x) % 2 == 1), "XOR");
@@ -826,10 +819,67 @@ public static partial class Functions
         Reg((c, a) =>
         {
             Args(a, 2);
-            int i = (int)c.Num(a[0]);
+            var iv = c.Eval(a[0]);
+            if (iv is ArrayVal or RangeVal { Range.IsSingle: false })
+            {
+                // CHOOSE({1,2}, A1:A5, B1:B5): element-wise pick
+                var ig = Grid(c, iv);
+                var picks = new CellValue[a.Length][,];
+                int rows = ig.GetLength(0), cols = ig.GetLength(1);
+                for (int k = 1; k < a.Length; k++)
+                {
+                    picks[k] = Grid(c, c.Eval(a[k]));
+                    rows = Math.Max(rows, picks[k].GetLength(0));
+                    cols = Math.Max(cols, picks[k].GetLength(1));
+                }
+                var res = new CellValue[rows, cols];
+                for (int r = 0; r < rows; r++)
+                    for (int k = 0; k < cols; k++)
+                    {
+                        var x = ig[ig.GetLength(0) == 1 ? 0 : Math.Min(r, ig.GetLength(0) - 1), ig.GetLength(1) == 1 ? 0 : Math.Min(k, ig.GetLength(1) - 1)];
+                        if (x.IsError) { res[r, k] = x; continue; }
+                        int n;
+                        try { n = (int)Calc.ToNum(x); } catch (FormulaError e) { res[r, k] = CellValue.Error(e.Code); continue; }
+                        if (n < 1 || n >= a.Length) { res[r, k] = CellValue.Error(Errors.Value); continue; }
+                        var p = picks[n];
+                        int pr = p.GetLength(0) == 1 ? 0 : r, pc = p.GetLength(1) == 1 ? 0 : k;
+                        res[r, k] = pr < p.GetLength(0) && pc < p.GetLength(1) ? p[pr, pc] : CellValue.Error(Errors.NA);
+                    }
+                return new ArrayVal(res);
+            }
+            int i = (int)Calc.ToNum(c.Calc.ToScalar(iv, c));
             if (i < 1 || i >= a.Length) throw Err(Errors.Value);
             return c.Eval(a[i]);
         }, "CHOOSE");
+    }
+
+    /// <summary>IFERROR / IFNA, element by element for arrays.</summary>
+    private static object IfError(Ctx c, Expr[] a, bool onlyNa)
+    {
+        Args(a, 2, 2);
+        bool Hit(CellValue x) => x.IsError && (!onlyNa || x.Str == Errors.NA);
+        var v = c.Eval(a[0]);
+        if (v is CellValue cv) return Hit(cv) ? (a[1] is MissingExpr ? N(0) : c.Eval(a[1])) : cv;
+        if (v is RangeVal { Range.IsSingle: true } one)
+        {
+            var s = c.Calc.ToScalar(one, c);
+            return Hit(s) ? (a[1] is MissingExpr ? N(0) : c.Eval(a[1])) : v;
+        }
+        if (v is LambdaVal) return v;
+        var g = Grid(c, v);
+        bool anyErr = false;
+        foreach (var x in g) if (Hit(x)) { anyErr = true; break; }
+        if (!anyErr) return v;
+        var alt = a[1] is MissingExpr ? new[,] { { N(0) } } : Grid(c, c.Eval(a[1]));
+        var res = new CellValue[g.GetLength(0), g.GetLength(1)];
+        for (int r = 0; r < g.GetLength(0); r++)
+            for (int k = 0; k < g.GetLength(1); k++)
+            {
+                if (!Hit(g[r, k])) { res[r, k] = g[r, k]; continue; }
+                int ar = alt.GetLength(0) == 1 ? 0 : r, ac = alt.GetLength(1) == 1 ? 0 : k;
+                res[r, k] = ar < alt.GetLength(0) && ac < alt.GetLength(1) ? alt[ar, ac] : CellValue.Error(Errors.NA);
+            }
+        return new ArrayVal(res);
     }
 
     private static List<bool> Logicals(Ctx c, Expr[] a)

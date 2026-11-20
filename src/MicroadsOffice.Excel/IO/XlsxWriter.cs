@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using ValidationType = MicroadsOffice.Excel.Model.ValidationType;
 using MicroadsOffice.Excel.Format;
+using MicroadsOffice.Excel.Formula;
 using MicroadsOffice.Excel.Model;
 
 namespace MicroadsOffice.Excel.IO;
@@ -113,6 +114,13 @@ public static class XlsxWriter
         wbRels.Add(("rId" + (n + 1), NsRel + "/styles", "styles.xml", false));
         wbRels.Add(("rId" + (n + 2), NsRel + "/sharedStrings", "sharedStrings.xml", false));
         wbRels.Add(("rId" + (n + 3), NsRel + "/theme", "theme/theme1.xml", false));
+        bool dynamicArrays = wb.Sheets.Any(sh => sh.AllCells.Any(kv => kv.Value.Formula != null && !kv.Value.Implicit && (kv.Value.Dynamic || FileFormula.MayReturnArray(kv.Value.Formula))));
+        if (dynamicArrays)
+        {
+            wbRels.Add(("rId" + (n + 4), NsRel + "/sheetMetadata", "metadata.xml", false));
+            Put(zip, "xl/metadata.xml", MetadataXml);
+            contentOverrides.Add(("/xl/metadata.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"));
+        }
         Put(zip, "xl/_rels/workbook.xml.rels", RelsXml(wbRels));
         Put(zip, "xl/styles.xml", StylesXml(wb, dxfs));
         Put(zip, "xl/theme/theme1.xml", ThemeXml);
@@ -130,7 +138,7 @@ public static class XlsxWriter
         var ct = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
             + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>"
             + "<Default Extension=\"vml\" ContentType=\"application/vnd.openxmlformats-officedocument.vmlDrawing\"/>");
-        foreach (var e in imageExts) ct.Append("<Default Extension=\"").Append(e).Append("\" ContentType=\"image/").Append(e).Append("\"/>");
+        foreach (var e in imageExts) ct.Append("<Default Extension=\"").Append(e).Append("\" ContentType=\"image/").Append(e is "jpg" or "jpeg" ? "jpeg" : e is "tif" ? "tiff" : e).Append("\"/>");
         ct.Append("<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>");
         for (int i = 0; i < wb.Sheets.Count; i++) ct.Append("<Override PartName=\"/xl/worksheets/sheet").Append(i + 1).Append(".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
         ct.Append("<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>")
@@ -164,6 +172,13 @@ public static class XlsxWriter
         }
         return sb.ToString();
     }
+
+    /// <summary>Cell metadata that marks formulas (cm="1") as dynamic arrays.</summary>
+    private const string MetadataXml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+        + "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\">"
+        + "<metadataTypes count=\"1\"><metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" pasteAll=\"1\" pasteValues=\"1\" merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" clearComments=\"1\" assign=\"1\" coerce=\"1\" cellMeta=\"1\"/></metadataTypes>"
+        + "<futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\"><xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata>"
+        + "<cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/></bk></cellMetadata></metadata>";
 
     private static void Put(ZipArchive zip, string name, string content)
     {
@@ -202,7 +217,7 @@ public static class XlsxWriter
             sb.Append("<sheet name=\"").Append(Esc(wb.Sheets[i].Name)).Append("\" sheetId=\"").Append(i + 1).Append('"').Append(wb.Sheets[i].Hidden ? " state=\"hidden\"" : "").Append(" r:id=\"rId").Append(i + 1).Append("\"/>");
         sb.Append("</sheets>");
         var names = new StringBuilder();
-        foreach (var (k, v) in wb.Names) names.Append("<definedName name=\"").Append(Esc(k)).Append("\">").Append(Esc(v)).Append("</definedName>");
+        foreach (var (k, v) in wb.Names) names.Append("<definedName name=\"").Append(Esc(k)).Append("\">").Append(Esc(FileFormula.ToFile(v))).Append("</definedName>");
         for (int i = 0; i < wb.Sheets.Count; i++)
         {
             var s = wb.Sheets[i];
@@ -298,8 +313,17 @@ public static class XlsxWriter
                     if (v.IsText) sb.Append(" t=\"str\"");
                     else if (v.IsBool) sb.Append(" t=\"b\"");
                     else if (v.IsError) sb.Append(" t=\"e\"");
-                    sb.Append("><f>").Append(Esc(cell.Formula)).Append("</f>");
-                    if (!v.IsBlank) sb.Append("<v>").Append(Esc(v.IsNumber ? F(v.Num) : v.IsBool ? (v.Num != 0 ? "1" : "0") : v.Str!)).Append("</v>");
+                    var ftext = Esc(FileFormula.ToFile(cell.Formula));
+                    if (!cell.Implicit && (cell.Dynamic || FileFormula.MayReturnArray(cell.Formula)))
+                    {
+                        // dynamic-array formula (metadata.xml record 1): ref = the spilled area
+                        var area = s.SpillArea(r, c) ?? CellRange.Single(r, c);
+                        sb.Append(" cm=\"1\"><f t=\"array\" ref=\"").Append(Addr.ToA1(area.R1, area.C1)).Append(area.IsSingle ? "" : ":" + Addr.ToA1(area.R2, area.C2)).Append("\">").Append(ftext).Append("</f>");
+                    }
+                    else sb.Append("><f>").Append(ftext).Append("</f>");
+                    // errors only dynamic-array Excel knows are stored as #VALUE! (Excel recalculates on load anyway)
+                    var vtext = v.IsError && v.Str is Errors.Spill or Errors.Calc ? Errors.Value : v.Str;
+                    if (!v.IsBlank) sb.Append("<v>").Append(Esc(v.IsNumber ? F(v.Num) : v.IsBool ? (v.Num != 0 ? "1" : "0") : vtext!)).Append("</v>");
                     sb.Append("</c>");
                     continue;
                 }

@@ -16,8 +16,8 @@
     <Company>Công ty TNHH Công nghệ Microads (microads.vn)</Company>
     <Description>Microads Office — Word, Excel, PDF. Phát hành bởi Công ty TNHH Công nghệ Microads, luôn luôn miễn phí. microads.vn</Description>
     <Copyright>© 2026 Microads — microads.vn</Copyright>
-    <Version>2.0.3</Version>
-    <FileVersion>2.0.3.0</FileVersion>
+    <Version>2.0.4</Version>
+    <FileVersion>2.0.4.0</FileVersion>
     <NoWarn>CA1416;SYSLIB0057;WFO1000;WFDEV001</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

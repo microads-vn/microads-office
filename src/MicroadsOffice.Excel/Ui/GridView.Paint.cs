@@ -146,6 +146,14 @@ public sealed partial class GridView
     {
         if (SelectedObject != null) return;
         var sel = Selection;
+        // spill range of the active cell's dynamic-array formula: thin blue frame (like Excel)
+        var spillFrom = Sheet.SpillSource(Active.Row, Active.Col);
+        var spillArea = spillFrom is var (sr, sc, _) ? Sheet.SpillArea(sr, sc) : Sheet.SpillArea(Active.Row, Active.Col);
+        if (spillArea is CellRange sa && RangeRect(sa) is Rectangle spr)
+        {
+            using var sp = new Pen(Color.FromArgb(68, 114, 196), Math.Max(1, Dpi.Scale(1)));
+            g.DrawRectangle(sp, spr.X, spr.Y, spr.Width - 1, spr.Height - 1);
+        }
         using var tint = new SolidBrush(Color.FromArgb(40, Theme.Accent));
         foreach (var x in ExtraRanges) if (RangeRect(x) is Rectangle er) g.FillRectangle(tint, er);
         if (RangeRect(sel) is Rectangle r)

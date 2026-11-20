@@ -170,9 +170,22 @@ public static partial class Functions
             }
             var g = Grid(c, v);
             if (g.GetLength(0) == 1 && a.Length == 2) { col = row; row = 1; }
-            if (col == 0) col = 1;
-            if (row == 0) row = 1;
-            if (row < 1 || col < 1 || row > g.GetLength(0) || col > g.GetLength(1)) throw Err(Errors.Ref);
+            else if (g.GetLength(1) == 1 && col == 0) col = 1;
+            if (g.GetLength(0) == 1 && row == 0) row = 1;
+            if (row < 0 || col < 0 || row > g.GetLength(0) || col > g.GetLength(1)) throw Err(Errors.Ref);
+            if (row == 0 && col == 0) return v;
+            if (row == 0)
+            {
+                var colv = new CellValue[g.GetLength(0), 1];
+                for (int i = 0; i < g.GetLength(0); i++) colv[i, 0] = g[i, col - 1];
+                return new ArrayVal(colv);
+            }
+            if (col == 0)
+            {
+                var rowv = new CellValue[1, g.GetLength(1)];
+                for (int k = 0; k < g.GetLength(1); k++) rowv[0, k] = g[row - 1, k];
+                return new ArrayVal(rowv);
+            }
             return g[row - 1, col - 1];
         }, "INDEX");
         Reg((c, a) =>
@@ -200,13 +213,21 @@ public static partial class Functions
         }, "INDIRECT");
         Reg((c, a) =>
         {
-            if (a.Length == 0) return N(c.Row + 1);
-            return c.Eval(a[0]) is RangeVal r ? N(r.Range.R1 + 1) : throw Err(Errors.Value);
+            if (a.Length == 0 || a[0] is MissingExpr) return N(c.Row + 1);
+            if (c.Eval(a[0]) is not RangeVal r) throw Err(Errors.Value);
+            if (r.Range.R1 == r.Range.R2 || r.Range.Rows > Addr.MaxRows / 2) return N(r.Range.R1 + 1);
+            var res = new CellValue[r.Range.Rows, 1];
+            for (int i = 0; i < r.Range.Rows; i++) res[i, 0] = N(r.Range.R1 + 1 + i);
+            return new ArrayVal(res);
         }, "ROW");
         Reg((c, a) =>
         {
-            if (a.Length == 0) return N(c.Col + 1);
-            return c.Eval(a[0]) is RangeVal r ? N(r.Range.C1 + 1) : throw Err(Errors.Value);
+            if (a.Length == 0 || a[0] is MissingExpr) return N(c.Col + 1);
+            if (c.Eval(a[0]) is not RangeVal r) throw Err(Errors.Value);
+            if (r.Range.C1 == r.Range.C2) return N(r.Range.C1 + 1);
+            var res = new CellValue[1, r.Range.Cols];
+            for (int i = 0; i < r.Range.Cols; i++) res[0, i] = N(r.Range.C1 + 1 + i);
+            return new ArrayVal(res);
         }, "COLUMN");
         Reg((c, a) => { Args(a, 1, 1); var v = c.Eval(a[0]); return N(v is RangeVal r ? r.Rows : v is ArrayVal av ? av.Rows : 1); }, "ROWS");
         Reg((c, a) => { Args(a, 1, 1); var v = c.Eval(a[0]); return N(v is RangeVal r ? r.Cols : v is ArrayVal av ? av.Cols : 1); }, "COLUMNS");
@@ -885,7 +906,7 @@ public static partial class Functions
             Args(a, 1, 1);
             var v = Probe(c, a[0]);
             if (!v.IsError) throw Err(Errors.NA);
-            return N(v.Str switch { Errors.Null => 1, Errors.Div0 => 2, Errors.Value => 3, Errors.Ref => 4, Errors.Name => 5, Errors.Num => 6, Errors.NA => 7, _ => 8 });
+            return N(v.Str switch { Errors.Null => 1, Errors.Div0 => 2, Errors.Value => 3, Errors.Ref => 4, Errors.Name => 5, Errors.Num => 6, Errors.NA => 7, Errors.Spill => 9, Errors.Calc => 14, _ => 8 });
         }, "ERROR.TYPE");
         Reg((c, a) =>
         {

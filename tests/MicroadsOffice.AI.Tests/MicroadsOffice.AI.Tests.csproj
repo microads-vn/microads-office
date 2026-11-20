@@ -15,4 +15,7 @@
     <ProjectReference Include="..\..\src\MicroadsOffice.Excel\MicroadsOffice.Excel.csproj" />
     <ProjectReference Include="..\..\src\MicroadsOffice.Pdf\MicroadsOffice.Pdf.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ClipTestUtil.cs" Link="Shared\ClipTestUtil.cs" />
+  </ItemGroup>
 </Project>

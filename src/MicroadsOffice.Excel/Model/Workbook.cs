@@ -13,9 +13,24 @@ public sealed class Cell
     internal Expr? Ast;
     internal int CalcStamp = -1;
 
+    // ---- dynamic arrays: a formula whose result is an array "spills" it into the cells to the right and below
+    /// <summary>For a spilled value: the formula cell it comes from and the offset from that cell.</summary>
+    internal Cell? SpillFrom;
+    internal int SpillDr, SpillDc;
+    /// <summary>For a formula cell: size of the area it currently spills into (0 when it does not spill).</summary>
+    internal int SpillRows, SpillCols;
+    /// <summary>The array result could not spill (#SPILL!).</summary>
+    internal bool SpillBlocked;
+    /// <summary>The last result was an array (saved as a dynamic-array formula).</summary>
+    internal bool Dynamic;
+    /// <summary>Formula from a file written without dynamic-array support: arrays reduce to one value (implicit intersection) like Excel's "@".</summary>
+    internal bool Implicit;
+
     public bool HasFormula => Formula != null;
+    /// <summary>The value was spilled by the formula of another cell.</summary>
+    public bool IsSpilled => SpillFrom != null;
     public bool IsEmpty => Formula == null && Value.IsBlank && StyleId == 0;
-    public Cell Clone() => new() { Value = Value, Formula = Formula, StyleId = StyleId, Ast = Ast };
+    public Cell Clone() => new() { Value = Value, Formula = Formula, StyleId = StyleId, Ast = Ast, Implicit = Implicit };
 }
 
 public enum CfType { GreaterThan, LessThan, Between, EqualTo, TextContains, Duplicate, Top10, Bottom10, AboveAverage, BelowAverage, DataBar, ColorScale2, ColorScale3, Expression }
@@ -186,6 +201,7 @@ public sealed class Sheet
     public void SetValue(int r, int c, CellValue v)
     {
         var cell = GetOrCreate(r, c);
+        ForgetSpill(r, c, cell);
         cell.Value = v;
         cell.Formula = null;
         cell.Ast = null;
@@ -196,6 +212,8 @@ public sealed class Sheet
     public void SetFormula(int r, int c, string formula)
     {
         var cell = GetOrCreate(r, c);
+        ForgetSpill(r, c, cell);
+        cell.Implicit = false;
         cell.Formula = formula.StartsWith('=') ? formula[1..] : formula;
         cell.Ast = null;
         cell.Value = CellValue.Blank;
@@ -222,7 +240,7 @@ public sealed class Sheet
     {
         var cell = GetCell(r, c);
         if (cell == null) return;
-        if (contents) { cell.Value = CellValue.Blank; cell.Formula = null; cell.Ast = null; Book.MarkDirty(); }
+        if (contents) { ForgetSpill(r, c, cell); cell.Value = CellValue.Blank; cell.Formula = null; cell.Ast = null; Book.MarkDirty(); }
         if (formats) cell.StyleId = 0;
         CleanupIfEmpty(r, c, cell);
     }
@@ -230,6 +248,40 @@ public sealed class Sheet
     private void CleanupIfEmpty(int r, int c, Cell cell)
     {
         if (cell.IsEmpty && !RowStyles.ContainsKey(r) && !ColStyles.ContainsKey(c)) Cells.Remove(Key(r, c));
+    }
+
+    internal void RemoveIfEmpty(long key)
+    {
+        if (!Cells.TryGetValue(key, out var cell)) return;
+        var (r, c) = FromKey(key);
+        CleanupIfEmpty(r, c, cell);
+    }
+
+    /// <summary>Content typed over a cell: it stops being a spilled value, and a formula cell drops what it spilled.</summary>
+    internal void ForgetSpill(int r, int c, Cell cell)
+    {
+        cell.SpillFrom = null;
+        cell.Dynamic = false;
+        cell.SpillBlocked = false;
+        if (cell.SpillRows > 0) Calc.ClearSpill(this, r, c, cell);
+    }
+
+    /// <summary>The formula cell whose array result covers (r, c), with its position (null when the cell is not spilled).</summary>
+    public (int Row, int Col, Cell Cell)? SpillSource(int r, int c)
+    {
+        var cell = GetCell(r, c);
+        if (cell?.SpillFrom == null) return null;
+        int mr = r - cell.SpillDr, mc = c - cell.SpillDc;
+        var m = GetCell(mr, mc);
+        return m == cell.SpillFrom && m.Formula != null ? (mr, mc, m) : null;
+    }
+
+    /// <summary>Area spilled by the formula at (r, c) (null when it does not spill).</summary>
+    public CellRange? SpillArea(int r, int c)
+    {
+        var cell = GetCell(r, c);
+        if (cell?.Formula == null || cell.SpillRows <= 0) return null;
+        return new CellRange(r, c, r + cell.SpillRows - 1, c + cell.SpillCols - 1);
     }
 
     public double ColWidth(int c) => HiddenCols.Contains(c) ? 0 : ColWidths.TryGetValue(c, out var w) ? w : DefaultColWidth;
@@ -285,7 +337,18 @@ public sealed class Sheet
             Zoom = Zoom, ActiveCell = ActiveCell, Selection = Selection, ScrollRow = ScrollRow, ScrollCol = ScrollCol, Hidden = Hidden
         };
         s.Cells = new Dictionary<long, Cell>(Cells.Count);
-        foreach (var (k, c) in Cells) s.Cells[k] = c.Clone();
+        Dictionary<Cell, Cell>? map = null;
+        foreach (var (k, c) in Cells)
+        {
+            var n = c.Clone();
+            n.SpillRows = c.SpillRows; n.SpillCols = c.SpillCols; n.SpillBlocked = c.SpillBlocked; n.Dynamic = c.Dynamic; n.Implicit = c.Implicit;
+            n.SpillDr = c.SpillDr; n.SpillDc = c.SpillDc;
+            if (c.SpillRows > 0 || c.SpillFrom != null) (map ??= new())[c] = n;
+            s.Cells[k] = n;
+        }
+        if (map != null)
+            foreach (var (old, n) in map)
+                if (old.SpillFrom != null && map.TryGetValue(old.SpillFrom, out var m)) n.SpillFrom = m;
         return s;
     }
 }

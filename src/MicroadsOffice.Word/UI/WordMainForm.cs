@@ -113,8 +113,15 @@ public sealed partial class WordMainForm : Form, IOfficeAppWindow
             foreach (var img in images) { HideBackstage(); _ed.InsertImageFile(img); }
             OpenFiles(dropped.Except(images).ToList(), false);
         };
+        // the page accepts everything other programs drag: text, formatted text, pictures (browser, chat app, Paint), files and folders
         _ed.AllowDrop = true;
-        _ed.DragEnter += (_, e) => { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
+        _ed.DragEnter += (_, e) => e.Effect = DataTransfer.HasContent(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        _ed.DragOver += (_, e) =>
+        {
+            e.Effect = DataTransfer.HasContent(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+            // documents are opened, not inserted: no insertion point for them
+            if (e.Effect != DragDropEffects.None && !DataTransfer.Files(e.Data).All(IsDocument)) _ed.ShowDropCaret(_ed.PointToClient(new Point(e.X, e.Y)));
+        };
         _ed.DragDrop += (s, e) => HandleDrop(e);
 
         Load += (_, _) =>
@@ -391,12 +398,25 @@ public sealed partial class WordMainForm : Form, IOfficeAppWindow
         if (s[4] == "1") WindowState = FormWindowState.Maximized;
     }
 
+    /// <summary>A file Microads Office opens itself (Word, Excel or PDF document) rather than inserting it as a link.</summary>
+    private static bool IsDocument(string path) => File.Exists(path) && !DataTransfer.IsImageFile(path) && Product.KindForFile(path) != null;
+
     private void HandleDrop(DragEventArgs e)
     {
-        if (e.Data?.GetData(DataFormats.FileDrop) is not string[] dropped) return;
-        var images = dropped.Where(WordEditor.IsImageFile).ToList();
-        foreach (var img in images) _ed.InsertImageFile(img);
-        OpenFiles(dropped.Except(images).ToList(), false);
+        if (e.Data == null) return;
+        HideBackstage();
+        var pt = _ed.PointToClient(new Point(e.X, e.Y));
+        var files = DataTransfer.Files(e.Data);
+        if (files.Length > 0)
+        {
+            // documents open in their app; pictures go into the page; any other file or folder becomes a link
+            var docs = files.Where(IsDocument).ToList();
+            var rest = files.Except(docs).ToList();
+            if (rest.Count > 0) { _ed.ShowDropCaret(pt); _ed.Focus(); _ed.InsertFiles(rest); }
+            if (docs.Count > 0) OpenFiles(docs, false);
+            return;
+        }
+        _ed.DropData(e.Data, pt);
     }
 
     // ------------------------------------------------------------------ AutoRecover
