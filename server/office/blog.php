@@ -112,7 +112,7 @@ if ($post) {
 <?php if ($post): ?><script type="application/ld+json"><?= json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?></script>
 <?php endif; ?>
 <link rel="icon" href="/office/assets/office.png">
-<link rel="stylesheet" href="/office/assets/style.css?v=10">
+<link rel="stylesheet" href="/office/assets/style.css?v=11">
 </head>
 <body class="blog">
 <?php layout_header($LANG, $alt); ?>

@@ -12,12 +12,12 @@ function layout_header(string $lang, array $alt): void {
     $blog = blog_base($lang);
     ?>
 <header class="bar">
-  <a class="brand" href="<?= h(home_path($lang)) ?>"><img src="/office/assets/mark.svg" alt="Microads" width="34" height="27"> MICROADS <span>Office</span></a>
+  <a class="brand" href="<?= h(home_path($lang)) ?>"><img src="/office/assets/mark.svg" alt="Microads" width="34" height="27"><b>MICROADS</b> <span>Office</span></a>
   <nav>
     <a href="<?= h($blog) ?>" class="navlink">Blog</a>
     <a href="<?= h(tool_path($lang)) ?>" class="navlink tool"><?= $lang === 'en' ? 'Formula generator' : 'Tạo công thức' ?></a>
-    <a href="<?= h($alt['vi']) ?>" class="flag <?= $lang === 'vi' ? 'on' : '' ?>" title="Tiếng Việt" hreflang="vi"><img src="/office/assets/flag-vi.svg" alt="" width="24" height="16"> VI</a>
-    <a href="<?= h($alt['en']) ?>" class="flag <?= $lang === 'en' ? 'on' : '' ?>" title="English" hreflang="en"><img src="/office/assets/flag-en.svg" alt="" width="24" height="16"> EN</a>
+    <a href="<?= h($alt['vi']) ?>" class="flag <?= $lang === 'vi' ? 'on' : '' ?>" title="Tiếng Việt" hreflang="vi"><img src="/office/assets/flag-vi.svg" alt="" width="24" height="16"><span class="flag-txt">VI</span></a>
+    <a href="<?= h($alt['en']) ?>" class="flag <?= $lang === 'en' ? 'on' : '' ?>" title="English" hreflang="en"><img src="/office/assets/flag-en.svg" alt="" width="24" height="16"><span class="flag-txt">EN</span></a>
     <a href="https://microads.vn" class="site">microads.vn</a>
   </nav>
 </header>

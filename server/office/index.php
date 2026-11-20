@@ -77,7 +77,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <?php if (($c['gscVerification'] ?? '') !== ''): ?><meta name="google-site-verification" content="<?= h($c['gscVerification']) ?>">
 <?php endif; ?>
 <link rel="icon" href="/office/assets/office.png">
-<link rel="stylesheet" href="/office/assets/style.css?v=10">
+<link rel="stylesheet" href="/office/assets/style.css?v=11">
 </head>
 <body>
 <?php layout_header($LANG, ['vi' => '/office/?lang=vi', 'en' => '/office/en/']); ?>

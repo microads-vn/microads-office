@@ -241,3 +241,11 @@ pre.log{font-size:12px;white-space:pre-wrap;background:#17261c08;border-radius:8
 @media (max-width:520px){.store-first .store-badge{display:block;max-width:360px}.store-first .store-badge img{width:100%;height:auto}.cta .store-badge{display:block;width:100%;max-width:300px;margin:0 auto}.cta .store-badge img{width:100%}}
 .store-cert{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;color:#fff;font-weight:600;font-size:15px;line-height:1.45}
 .store-cert svg{flex-shrink:0;color:#5fd27a;margin-top:1px}
+/* header: never break the brand or the nav labels (phones) */
+.bar .brand,.bar nav a{white-space:nowrap;overflow-wrap:normal;word-break:keep-all}
+.bar .brand{flex-shrink:0;min-width:0}
+.bar .brand b{font-weight:800}
+.bar nav{flex-wrap:nowrap;justify-content:flex-end;min-width:0}
+@media (max-width:520px){.bar{padding:10px 12px;gap:8px}.brand{font-size:15px;gap:7px}.brand img{width:28px;height:auto}.bar nav{gap:2px}.bar nav a{padding:6px 6px}}
+@media (max-width:440px){.flag-txt{display:none}.bar nav a.flag{padding:6px 5px}}
+@media (max-width:340px){.brand span{display:none}}
