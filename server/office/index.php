@@ -1,15 +1,47 @@
 <?php
-// Public page: microads.vn/office — latest version, download, release notes.
+// Public page: microads.vn/office — latest version, download, install guide, versions.
 declare(strict_types=1);
 require __DIR__ . '/inc/bootstrap.php';
-$LANG = lang();
+require __DIR__ . '/inc/blog.php';
+require __DIR__ . '/inc/layout.php';
+// Language: /office/ = Vietnamese, /office/en/ = English (nginx passes hl=en). Each language has its own URL for search engines.
+// Visitors who chose English (cookie) or whose browser does not ask for Vietnamese are sent to /office/en/ (crawlers send no
+// Accept-Language and always get the Vietnamese page).
+$setLang = function (string $l): void { if (PHP_SAPI !== 'cli') setcookie('mo_lang', $l, ['expires' => time() + 31536000, 'path' => '/office', 'secure' => true, 'samesite' => 'Lax']); };
+if (($_GET['hl'] ?? '') === 'en') { $LANG = 'en'; }
+elseif (($_GET['lang'] ?? '') === 'en') { $setLang('en'); header('Location: /office/en/', true, 301); exit; }
+elseif (($_GET['lang'] ?? '') === 'vi') { $LANG = 'vi'; $setLang('vi'); }
+else {
+    $al = strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+    $cookie = $_COOKIE['mo_lang'] ?? '';
+    header('Vary: Accept-Language, Cookie');
+    if ($cookie === 'en' || ($cookie === '' && $al !== '' && !str_contains($al, 'vi'))) { header('Location: /office/en/', true, 302); exit; }
+    $LANG = 'vi';
+}
+$canonical = 'https://microads.vn' . home_path($LANG);
+$posts = blog_list($LANG);
+track_view(home_path($LANG));
 $c = load_config();
 $p = $c['promo'];
 $latest = release_by_version($c, $c['latest']);
 $store = store_links($c);
 $web = websetup_info($c);           // web installer: small, never changes, always installs the latest signed release
-$winget = winget_id($c);
 $L = fn(array $x) => $x[$LANG] ?? ($x['vi'] ?? '');
+// Generic shopping-bag icon for the Microsoft Store button (no Microsoft logo).
+$storeIcon = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>';
+// Release notes: lines starting with "-" or "•" become a list, other lines paragraphs.
+$notes = function (string $s): string {
+    $out = ''; $items = [];
+    $flush = function () use (&$out, &$items) { if ($items) { $out .= '<ul>' . implode('', $items) . '</ul>'; $items = []; } };
+    foreach (preg_split('/\R/u', trim($s)) as $line) {
+        $line = trim($line);
+        if ($line === '') continue;
+        if (preg_match('/^[-•]\s*(.+)$/u', $line, $m)) { $items[] = '<li>' . h($m[1]) . '</li>'; continue; }
+        $flush(); $out .= '<p>' . h($line) . '</p>';
+    }
+    $flush();
+    return $out;
+};
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 ?><!doctype html>
@@ -17,23 +49,38 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Microads Office — <?= t('Word, Excel, PDF miễn phí · Tải & cập nhật', 'Free Word, Excel, PDF · Download & updates') ?></title>
-<meta name="description" content="<?= h(t('Microads Office: bộ ứng dụng văn phòng Word, Excel, PDF (đọc & ký số) — phát hành bởi Công ty TNHH Công nghệ Microads, luôn luôn miễn phí.', 'Microads Office: Word, Excel and PDF (read & sign) office suite — published by Microads Technology Co., Ltd., always free.')) ?>">
-<link rel="canonical" href="https://microads.vn/office/">
+<title><?= t('Microads Office — Word, Excel, PDF miễn phí, không cần tài khoản', 'Microads Office — Free Word, Excel & PDF for Windows, no account') ?></title>
+<meta name="description" content="<?= h(t('Tải Microads Office miễn phí vĩnh viễn: soạn thảo văn bản .docx, bảng tính .xlsx với 502 hàm Excel, đọc và ký số PDF bằng USB token. Không cần tài khoản, dành cho Windows 10/11.', 'Download Microads Office free forever: a .docx word processor, .xlsx spreadsheets with 502 Excel functions, and a PDF reader that signs with digital certificates. No account needed. Windows 10/11.')) ?>">
+<link rel="canonical" href="<?= h($canonical) ?>">
+<link rel="alternate" hreflang="vi" href="https://microads.vn/office/">
+<link rel="alternate" hreflang="en" href="https://microads.vn/office/en/">
+<link rel="alternate" hreflang="x-default" href="https://microads.vn/office/en/">
+<link rel="alternate" type="application/rss+xml" title="Microads Office Blog" href="<?= h(blog_base($LANG)) ?>feed.xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Microads Office">
+<meta property="og:title" content="<?= h(t('Microads Office — Word, Excel, PDF miễn phí vĩnh viễn', 'Microads Office — free Word, Excel & PDF, forever')) ?>">
+<meta property="og:description" content="<?= h(t('Bộ ứng dụng văn phòng miễn phí cho Windows. Không cần tài khoản.', 'A free office suite for Windows. No account needed.')) ?>">
+<meta property="og:url" content="<?= h($canonical) ?>">
+<meta property="og:image" content="https://microads.vn/office/assets/blog/free-office-<?= $LANG ?>.jpg">
+<meta property="og:locale" content="<?= $LANG === 'en' ? 'en_US' : 'vi_VN' ?>">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json"><?= json_encode([
+    '@context' => 'https://schema.org',
+    '@graph' => [
+        ['@type' => 'Organization', '@id' => 'https://microads.vn/#org', 'name' => $LANG === 'en' ? 'Microads Technology Co., Ltd.' : 'Công ty TNHH Công nghệ Microads', 'url' => 'https://microads.vn/', 'logo' => 'https://microads.vn/office/assets/office.png'],
+        ['@type' => 'SoftwareApplication', 'name' => 'Microads Office', 'operatingSystem' => 'Windows 10, Windows 11', 'applicationCategory' => 'BusinessApplication',
+            'inLanguage' => ['vi', 'en'], 'url' => $canonical, 'downloadUrl' => 'https://microads.vn/office/download/MicroadsOffice_Setup.exe',
+            'softwareVersion' => $latest['version'] ?? null, 'license' => 'https://www.gnu.org/licenses/gpl-3.0.html', 'isAccessibleForFree' => true,
+            'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'USD'], 'publisher' => ['@id' => 'https://microads.vn/#org'],
+            'screenshot' => 'https://microads.vn/office/assets/blog/shot-excel-explain.jpg'],
+    ]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
 <?php if (($c['gscVerification'] ?? '') !== ''): ?><meta name="google-site-verification" content="<?= h($c['gscVerification']) ?>">
 <?php endif; ?>
-<link rel="icon" href="assets/office.png">
-<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="/office/assets/office.png">
+<link rel="stylesheet" href="/office/assets/style.css?v=7">
 </head>
 <body>
-<header class="bar">
-  <a class="brand" href="https://microads.vn"><img src="assets/mark.svg" alt="Microads" width="34" height="27"> MICROADS <span>Office</span></a>
-  <nav>
-    <a href="?lang=vi" class="flag <?= $LANG === 'vi' ? 'on' : '' ?>" title="Tiếng Việt"><img src="assets/flag-vi.svg" alt="" width="24" height="16"> VI</a>
-    <a href="?lang=en" class="flag <?= $LANG === 'en' ? 'on' : '' ?>" title="English"><img src="assets/flag-en.svg" alt="" width="24" height="16"> EN</a>
-    <a href="https://microads.vn" class="site">microads.vn</a>
-  </nav>
-</header>
+<?php layout_header($LANG, ['vi' => '/office/?lang=vi', 'en' => '/office/en/']); ?>
 
 <section class="hero">
   <div class="wrap hero-in">
@@ -42,99 +89,92 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
       <h1>Microads Office</h1>
       <p class="lead"><?= t('Soạn thảo văn bản, bảng tính và PDF (đọc, ký số, in) trong một bộ cài duy nhất — không giới hạn tính năng, không cần tài khoản.', 'Documents, spreadsheets and PDF (read, sign, print) in a single installer — no hidden limits, no account needed.') ?></p>
       <?php if ($latest): ?>
-        <?php if ($store): ?>
-          <a class="btn primary big" href="<?= h($store['installer']) ?>"><?= t('Tải Microads Office', 'Download Microads Office') ?></a>
-          <a class="btn big ghost" href="download/<?= h(rawurlencode($web['file'] ?? $latest['file'])) ?>"><?= t('Tải bộ cài .exe', 'Download .exe installer') ?></a>
-        <?php elseif ($web): ?>
-          <a class="btn primary big" id="dl-main" href="download/<?= h(rawurlencode($web['file'])) ?>"><?= t('Tải Microads Office', 'Download Microads Office') ?></a>
-          <a class="btn big ghost" id="dl-full" href="download/<?= h(rawurlencode($latest['file'])) ?>"><?= t('Bộ cài đầy đủ', 'Full installer') ?> <?= h($latest['version']) ?></a>
+        <div class="dl">
+        <?php if ($web): ?>
+          <a class="btn primary big" id="dl-main" href="/office/download/<?= h(rawurlencode($web['file'])) ?>" data-warn><?= t('Tải Microads Office', 'Download Microads Office') ?></a>
+          <a class="btn big ghost" id="dl-full" href="/office/download/<?= h(rawurlencode($latest['file'])) ?>" data-warn><?= t('Bộ cài đầy đủ', 'Full installer') ?> <?= h($latest['version']) ?></a>
         <?php else: ?>
-          <a class="btn primary big" id="dl-full" href="download/<?= h(rawurlencode($latest['file'])) ?>"><?= t('Tải Microads Office', 'Download Microads Office') ?> <?= h($latest['version']) ?></a>
+          <a class="btn primary big" id="dl-full" href="/office/download/<?= h(rawurlencode($latest['file'])) ?>" data-warn><?= t('Tải Microads Office', 'Download Microads Office') ?> <?= h($latest['version']) ?></a>
         <?php endif; ?>
-        <?php if ($web && !$store): ?>
+        <?php if ($store): ?>
+          <a class="btn big store" id="dl-store" href="<?= h($store['page']) ?>"><?= $storeIcon ?><?= t('Tải từ Microsoft Store', 'Get it from Microsoft Store') ?></a>
+        <?php else: ?>
+          <button type="button" class="btn big store" id="dl-store" data-wait><?= $storeIcon ?><?= t('Tải từ Microsoft Store', 'Get it from Microsoft Store') ?></button>
+        <?php endif; ?>
+        </div>
+        <?php if ($web): ?>
         <p class="meta"><?= t('Windows 10/11 64-bit · trình cài đặt', 'Windows 10/11 64-bit · installer') ?> <?= fmt_size((int)$web['size']) ?> <?= t('luôn cài bản mới nhất', 'always installs the latest version') ?> <b><?= h($latest['version']) ?></b> (<?= t('phát hành', 'released') ?> <?= h(date('d/m/Y', strtotime($latest['date']))) ?>) · <?= t('bộ cài đầy đủ', 'full installer') ?> <?= fmt_size((int)$latest['size']) ?></p>
         <?php else: ?>
         <p class="meta"><?= t('Windows 10/11 64-bit', 'Windows 10/11 64-bit') ?> · <?= fmt_size((int)$latest['size']) ?> · <?= t('phát hành', 'released') ?> <?= h(date('d/m/Y', strtotime($latest['date']))) ?></p>
         <?php endif; ?>
+
+        <details class="guide" id="cai-dat-an-toan">
+          <summary><?= t('Hướng dẫn cài đặt', 'Installation guide') ?></summary>
+          <div class="guide-body">
+            <p><?= t('Microads Office là phần mềm miễn phí và an toàn. Vì là ứng dụng mới phát hành, còn ít lượt tải, Chrome có thể báo <i>"tệp ít được tải xuống / đáng ngờ"</i> và Windows có thể hiện màn hình xanh <i>"Windows đã bảo vệ PC của bạn"</i>. Đây là cảnh báo về <b>độ phổ biến</b> của tệp, không phải phát hiện virus: Microsoft Defender không tìm thấy mối đe dọa nào trong Microads Office.',
+                'Microads Office is free and safe software. Because it is a newly released app with few downloads so far, Chrome may say the file is <i>"not commonly downloaded / suspicious"</i> and Windows may show the blue <i>"Windows protected your PC"</i> screen. These warnings are about how <b>common</b> the file is, not a virus detection: Microsoft Defender finds no threat in Microads Office.') ?></p>
+            <ol class="steps">
+              <li><?= t('Chỉ tải từ đúng địa chỉ <b>microads.vn/office</b>.', 'Only download from <b>microads.vn/office</b>.') ?></li>
+              <li><?= t('<b>Chrome</b> báo <i>"Chrome đã chặn tệp tải xuống này vì tệp này ít được tải xuống"</i>: nhấn <kbd>Ctrl</kbd>+<kbd>J</kbd> → bấm <b>⋮</b> bên cạnh tệp → <b>Tải tệp đáng ngờ xuống</b>. <b>Edge</b>: bấm <b>…</b> → <b>Giữ lại</b>.', '<b>Chrome</b> says the file <i>"isn\'t commonly downloaded"</i>: press <kbd>Ctrl</kbd>+<kbd>J</kbd> → click <b>⋮</b> next to the file → <b>Download suspicious file</b>. <b>Edge</b>: click <b>…</b> → <b>Keep</b>.') ?></li>
+              <li><?= t('<b>Windows</b> hiện màn hình xanh: bấm <b>Thông tin bổ sung</b> → <b>Vẫn chạy</b>. Windows chỉ hỏi một lần: Word, Excel, PDF sau khi cài và mọi bản cập nhật về sau đều không hỏi lại.', '<b>Windows</b>: click <b>More info</b> → <b>Run anyway</b>. Windows asks only once: Word, Excel, PDF after installing and every later update never ask again.') ?></li>
+              <li><?= t('Ứng dụng tự kiểm tra phiên bản mới; mọi bản cập nhật đều có chữ ký số của Microads và được kiểm tra trước khi cài.', 'The apps check for new versions themselves; every update is digitally signed by Microads and verified before it is installed.') ?></li>
+            </ol>
+            <?php if ($web): ?>
+            <p><?= t('<b>Nên chọn nút nào?</b> <b>Tải Microads Office</b> là trình cài đặt trực tuyến nhỏ gọn, tự tải bản mới nhất từ microads.vn và chỉ chạy khi tệp có <b>chữ ký số hợp lệ của Microads</b>. <b>Bộ cài đầy đủ</b> dùng khi cần cài trên máy không có Internet. <b>Microsoft Store</b> cài không có cảnh báo và tự cập nhật.',
+                '<b>Which button?</b> <b>Download Microads Office</b> is a small web installer: it downloads the latest version from microads.vn and only runs it when the file carries a <b>valid Microads digital signature</b>. Use the <b>Full installer</b> for computers without Internet access. <b>Microsoft Store</b> installs without warnings and updates automatically.') ?></p>
+            <?php endif; ?>
+            <p class="muted small"><a href="/office/code-signing">Code signing policy</a> · <?= t('mã nguồn công khai tại', 'source code at') ?> <a href="https://github.com/microads-vn/microads-office">github.com/microads-vn/microads-office</a><br>
+              <?= t('Kiểm tra tính toàn vẹn (PowerShell):', 'Verify integrity (PowerShell):') ?> <code>Get-FileHash &lt;<?= t('tệp', 'file') ?>&gt;</code><br>
+              <?php if ($web): ?><?= h($web['file']) ?> — SHA-256: <code class="hash" id="sha-web"><?= h($web['sha256']) ?></code><br><?php endif; ?>
+              <?= h($latest['file']) ?> — SHA-256: <code class="hash" id="sha-full"><?= h($latest['sha256']) ?></code></p>
+          </div>
+        </details>
       <?php else: ?>
         <p class="meta"><?= t('Phiên bản đầu tiên sắp được phát hành.', 'The first version will be released soon.') ?></p>
       <?php endif; ?>
     </div>
     <div class="apps">
-      <div class="app word"><img src="assets/word.png" alt="" width="64" height="64"><b>Word</b><span><?= t('Soạn thảo văn bản, .docx', 'Word processing, .docx') ?></span></div>
-      <div class="app excel"><img src="assets/excel.png" alt="" width="64" height="64"><b>Excel</b><span><?= t('Bảng tính, công thức, biểu đồ', 'Spreadsheets, formulas, charts') ?></span></div>
-      <div class="app pdf"><img src="assets/pdf.png" alt="" width="64" height="64"><b>PDF</b><span><?= t('Đọc, ký số, in PDF', 'Read, sign, print PDF') ?></span></div>
+      <div class="app word"><img src="/office/assets/word.png" alt="" width="64" height="64"><b>Word</b><span><?= t('Soạn thảo văn bản, .docx', 'Word processing, .docx') ?></span></div>
+      <div class="app excel"><img src="/office/assets/excel.png" alt="" width="64" height="64"><b>Excel</b><span><?= t('Bảng tính, công thức, biểu đồ', 'Spreadsheets, formulas, charts') ?></span></div>
+      <div class="app pdf"><img src="/office/assets/pdf.png" alt="" width="64" height="64"><b>PDF</b><span><?= t('Đọc, ký số, in PDF', 'Read, sign, print PDF') ?></span></div>
     </div>
   </div>
 </section>
 
 <main class="wrap">
-  <?php if ($latest): ?>
-  <section class="card" id="cai-dat-an-toan">
-    <h2><?= t('Cài đặt an toàn', 'Safe installation') ?></h2>
-    <?php if ($store): ?>
-    <p><?= t('Nút <b>Tải Microads Office</b> tải bộ cài chính thức của <b>Microsoft Store</b> (do Microsoft ký số): cài đặt không có cảnh báo, tự cập nhật. Xem trên <a href="' . h($store['page']) . '">Microsoft Store</a>.', 'The <b>Download</b> button gets the official <b>Microsoft Store</b> installer (signed by Microsoft): no warnings, automatic updates. See it on <a href="' . h($store['page']) . '">Microsoft Store</a>.') ?></p>
-    <?php endif; ?>
-    <p><?= t('Microads Office là phần mềm miễn phí, không mua chứng thư ký mã trả phí. Với tệp .exe mới, Chrome có thể báo <i>"tệp không thường được tải xuống / đáng ngờ"</i> và Windows có thể hiện <i>"Windows đã bảo vệ PC của bạn"</i>. Đây là cảnh báo về <b>độ phổ biến</b> của tệp, không phải phát hiện virus: Microsoft Defender không tìm thấy mối đe dọa nào trong Microads Office.',
-        'Microads Office is free software and does not buy a paid code-signing certificate. For a new .exe, Chrome may say the file is <i>"not commonly downloaded / suspicious"</i> and Windows may show <i>"Windows protected your PC"</i>. These warnings are about how <b>common</b> the file is, not a virus detection: Microsoft Defender finds no threat in Microads Office.') ?></p>
-    <ol class="steps">
-      <li><?= t('Chỉ tải từ đúng địa chỉ <b>microads.vn/office</b>.', 'Only download from <b>microads.vn/office</b>.') ?></li>
-      <li><?= t('<b>Chrome</b> báo <i>"Chrome đã chặn tệp tải xuống này vì tệp này ít được tải xuống"</i>: nhấn <kbd>Ctrl</kbd>+<kbd>J</kbd> → bấm <b>⋮</b> bên cạnh tệp → <b>Tải tệp đáng ngờ xuống</b>. <b>Edge</b>: bấm <b>…</b> → <b>Giữ lại</b>.', '<b>Chrome</b> says the file <i>"isn\'t commonly downloaded"</i>: press <kbd>Ctrl</kbd>+<kbd>J</kbd> → click <b>⋮</b> next to the file → <b>Download suspicious file</b>. <b>Edge</b>: click <b>…</b> → <b>Keep</b>.') ?></li>
-      <li><?= t('<b>Windows</b>: bấm <b>Thông tin bổ sung</b> → <b>Vẫn chạy</b>. Windows chỉ hỏi một lần: Word, Excel, PDF sau khi cài và mọi bản cập nhật về sau đều không hỏi lại.', '<b>Windows</b>: click <b>More info</b> → <b>Run anyway</b>. Windows asks only once: Word, Excel, PDF after installing and every later update never ask again.') ?></li>
-    </ol>
-    <?php if ($web && !$store): ?>
-    <p><?= t('<b>Vì sao nên dùng trình cài đặt trực tuyến?</b> Tệp này nhỏ và <b>không bao giờ thay đổi</b> giữa các phiên bản, nên mỗi lượt tải đều giúp Chrome và Windows nhận biết nó — cảnh báo giảm dần rồi hết hẳn, kể cả khi Microads phát hành bản mới. Trình cài đặt tải bản mới nhất từ microads.vn và chỉ chạy khi tệp có <b>chữ ký số hợp lệ của Microads</b>.',
-        '<b>Why the web installer?</b> It is small and <b>never changes</b> between versions, so every download helps Chrome and Windows recognise it — the warnings fade and disappear, even when Microads releases a new version. It downloads the latest version from microads.vn and only runs it when the file carries a <b>valid Microads digital signature</b>.') ?></p>
-    <?php endif; ?>
-    <p class="muted"><a href="code-signing">Code signing policy</a> · <?= t('mã nguồn công khai tại', 'source code at') ?> <a href="https://github.com/microads-vn/microads-office">github.com/microads-vn/microads-office</a></p>
-    <p class="muted"><?= t('Kiểm tra tính toàn vẹn (PowerShell):', 'Verify integrity (PowerShell):') ?> <code>Get-FileHash &lt;<?= t('tệp', 'file') ?>&gt;</code><br>
-      <?php if ($web): ?><?= h($web['file']) ?> — SHA-256: <code class="hash" id="sha-web"><?= h($web['sha256']) ?></code><br><?php endif; ?>
-      <?= h($latest['file']) ?> — SHA-256: <code class="hash" id="sha-full"><?= h($latest['sha256']) ?></code></p>
-  </section>
-
-  <section class="card" id="cai-bang-lenh">
-    <h2><?= t('Cài bằng lệnh — không có cảnh báo của trình duyệt', 'Install with a command — no browser warnings') ?></h2>
-    <p><?= t('Dành cho người dùng quen máy tính và bộ phận IT. Lệnh tải bản mới nhất trực tiếp từ microads.vn, kiểm tra SHA-256 và chữ ký số của Microads rồi mới cài, nên không đi qua bước cảnh báo tải xuống của trình duyệt.',
-        'For experienced users and IT departments. The command downloads the latest version directly from microads.vn, checks the SHA-256 and the Microads digital signature before installing, so the browser download warning does not apply.') ?></p>
-    <?php if ($winget): ?>
-    <h3>Windows Package Manager (winget)</h3>
-    <div class="cmd"><code id="cmd-winget">winget install --id <?= h($winget) ?> -e</code><button type="button" class="btn sm copy" data-copy="cmd-winget"><?= t('Sao chép', 'Copy') ?></button></div>
-    <?php endif; ?>
-    <h3>PowerShell</h3>
-    <p class="muted"><?= t('Mở <b>PowerShell</b> từ menu Start (không cần quyền quản trị), dán lệnh rồi nhấn Enter:', 'Open <b>PowerShell</b> from the Start menu (no administrator rights needed), paste the command and press Enter:') ?></p>
-    <div class="cmd"><code id="cmd-ps">irm <?= h(MO_BASE_URL) ?>/install.ps1 | iex</code><button type="button" class="btn sm copy" data-copy="cmd-ps"><?= t('Sao chép', 'Copy') ?></button></div>
-    <?php if ($web && !$store): ?>
-    <h3><?= t('Cài hàng loạt (IT)', 'Mass deployment (IT)') ?></h3>
-    <div class="cmd"><code id="cmd-silent">MicroadsOffice_Setup.exe --silent</code><button type="button" class="btn sm copy" data-copy="cmd-silent"><?= t('Sao chép', 'Copy') ?></button></div>
-    <p class="muted"><?= t('Cài im lặng cho người dùng hiện tại, không cần quyền quản trị; thêm <code>--dir "D:\\Apps\\Microads Office"</code> để chọn thư mục. Mã thoát 0 = thành công.', 'Silent install for the current user, no administrator rights; add <code>--dir "D:\\Apps\\Microads Office"</code> to choose the folder. Exit code 0 = success.') ?></p>
-    <?php endif; ?>
-    <p class="muted"><?= t('An toàn: chỉ dán lệnh lấy từ đúng trang <b>microads.vn/office</b>. Microads không bao giờ yêu cầu bạn dán lệnh vào hộp thoại Run (Win+R).', 'Safety: only paste commands taken from <b>microads.vn/office</b> itself. Microads never asks you to paste a command into the Run box (Win+R).') ?></p>
-  </section>
-  <?php endif; ?>
-
-  <section class="card">
-    <h2><?= t('Cập nhật phần mềm', 'Software updates') ?></h2>
-    <p><?= t('Ứng dụng tự kiểm tra phiên bản mới mỗi khi mở. Bạn cũng có thể bấm <b>Kiểm tra cập nhật</b> (biểu tượng ↻ ở góc trên bên phải, hoặc thẻ Trợ giúp) trong Word, Excel hoặc PDF. Mọi bản cập nhật đều có chữ ký số của Microads và được kiểm tra trước khi cài.',
-        'The apps check for a new version every time they start. You can also click <b>Check for updates</b> (the ↻ icon at the top right, or the Help tab) in Word, Excel or PDF. Every update is digitally signed by Microads and verified before it is installed.') ?></p>
-    <?php if ($latest && trim($L($latest['notes'])) !== ''): ?>
-      <h3><?= t('Có gì mới trong', "What's new in") ?> <?= h($latest['version']) ?></h3>
-      <div class="notes"><?= nl2br(h($L($latest['notes']))) ?></div>
-    <?php endif; ?>
-  </section>
-
-  <?php if (count($c['releases']) > 1): ?>
-  <section class="card">
+  <?php if ($c['releases']): ?>
+  <section class="card" id="cac-phien-ban">
     <h2><?= t('Các phiên bản', 'Versions') ?></h2>
-    <table class="tbl"><thead><tr><th><?= t('Phiên bản', 'Version') ?></th><th><?= t('Ngày', 'Date') ?></th><th><?= t('Ghi chú', 'Notes') ?></th></tr></thead><tbody>
+    <table class="tbl versions"><thead><tr><th><?= t('Phiên bản', 'Version') ?></th><th><?= t('Ngày', 'Date') ?></th><th><?= t('Ghi chú', 'Notes') ?></th></tr></thead><tbody>
     <?php foreach ($c['releases'] as $r): ?>
-      <tr><td><b><?= h($r['version']) ?></b></td><td><?= h(date('d/m/Y', strtotime($r['date']))) ?></td><td class="muted"><?= nl2br(h($L($r['notes']))) ?></td></tr>
+      <tr><td class="v"><b><?= h($r['version']) ?></b></td><td class="d"><?= h(date('d/m/Y', strtotime($r['date']))) ?></td><td class="n"><?= $notes($L($r['notes'])) ?></td></tr>
     <?php endforeach; ?>
     </tbody></table>
   </section>
   <?php endif; ?>
 
+  <?php if ($posts): ?>
+  <section class="card" id="bai-viet">
+    <h2><?= t('Bài viết mới', 'Latest articles') ?></h2>
+    <div class="post-grid">
+    <?php foreach (array_slice($posts, 0, 3) as $bp): ?>
+      <a class="post-card" href="<?= h(blog_base($LANG) . $bp['slug']) ?>"><img src="/office/assets/blog/<?= h($bp['pillar']) ?>-<?= $LANG ?>.jpg" alt="" width="600" height="315" loading="lazy"><b><?= h($bp['title']) ?></b><span><?= h($bp['excerpt'] ?? '') ?></span></a>
+    <?php endforeach; ?>
+    </div>
+    <p><a href="<?= h(blog_base($LANG)) ?>"><?= t('Xem tất cả bài viết', 'See all articles') ?> →</a></p>
+  </section>
+  <?php endif; ?>
+
+  <section class="card tool-promo">
+    <div>
+      <h2><?= t('Tạo công thức Excel bằng AI — miễn phí', 'Free AI Excel formula generator') ?></h2>
+      <p><?= t('Mô tả việc cần tính bằng lời, nhận ngay công thức kèm giải thích. Dùng được trong Microads Office Excel và Microsoft Excel.', 'Describe the calculation in plain words and get a ready-to-paste formula with an explanation. Works in Microads Office Excel and Microsoft Excel.') ?></p>
+    </div>
+    <a class="btn primary" href="<?= h(tool_path($LANG)) ?>"><?= t('Thử ngay', 'Try it') ?> →</a>
+  </section>
+
   <section class="card publisher">
-    <img src="assets/mark.svg" alt="" width="70" height="56">
+    <img src="/office/assets/mark.svg" alt="" width="70" height="56">
     <div>
       <h2><?= h($L($p['company'])) ?></h2>
       <p><?= h($L($p['headline'])) ?></p>
@@ -146,16 +186,11 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
     </div>
   </section>
 </main>
-<footer class="foot wrap">© <?= date('Y') ?> <?= h($L($p['company'])) ?> · <a href="https://microads.vn">microads.vn</a> · <a href="privacy"><?= t('Chính sách quyền riêng tư', 'Privacy policy') ?></a> · <a href="code-signing" id="lnk-code-signing">Code signing policy</a> · <a href="https://github.com/microads-vn/microads-office" id="lnk-source"><?= t('Mã nguồn mở (GPL-3.0)', 'Open source (GPL-3.0)') ?></a></footer>
+<?php layout_footer($LANG, $p); ?>
+<?php if ($latest) layout_download_notice($LANG, $store); ?>
 <script>
-document.querySelectorAll('button.copy').forEach(function (b) {
-  b.addEventListener('click', function () {
-    var el = document.getElementById(b.getAttribute('data-copy')), text = el.textContent, label = b.textContent;
-    function done() { b.textContent = '<?= t('Đã sao chép ✓', 'Copied ✓') ?>'; setTimeout(function () { b.textContent = label; }, 1800); }
-    function fallback() { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); try { document.execCommand('copy'); done(); } catch (e) {} }
-    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, fallback); } else { fallback(); }
-  });
-});
+// Old links to #cai-dat-an-toan open the installation guide.
+(function () { var d = document.getElementById('cai-dat-an-toan'); if (d && location.hash === '#cai-dat-an-toan') d.open = true; })();
 </script>
 </body>
 </html>

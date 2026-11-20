@@ -2,6 +2,8 @@
 // Microads Office — trang quản trị cập nhật: microads.vn/office/admin/
 declare(strict_types=1);
 require dirname(__DIR__) . '/inc/bootstrap.php';
+require dirname(__DIR__) . '/inc/blog.php';
+require dirname(__DIR__) . '/inc/ai.php';
 
 session_name('mo_admin');
 // HTTPS-only cookie; MO_DEV_INSECURE_COOKIES is set only by the local test server (plain http on 127.0.0.1).
@@ -139,6 +141,50 @@ if ($logged && $_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
                 save_config($c); audit('promo');
                 $flash[] = ['ok', 'Đã lưu nội dung quảng bá. Ứng dụng của khách nhận nội dung mới ở lần kiểm tra kế tiếp (không cần phát hành lại).'];
                 break;
+            case 'seo_settings':
+                $st = blog_settings();
+                $st['enabled'] = isset($_POST['enabled']);
+                $st['minPerDay'] = max(0, min(10, (int)$_POST['minPerDay']));
+                $st['maxPerDay'] = max($st['minPerDay'], min(10, (int)$_POST['maxPerDay']));
+                $st['dailyBudgetUsd'] = max(0, min(50, (float)$_POST['dailyBudgetUsd']));
+                $st['toolDailyBudgetUsd'] = max(0, min($st['dailyBudgetUsd'], (float)$_POST['toolDailyBudgetUsd']));
+                $st['toolDailyCap'] = max(0, min(5000, (int)$_POST['toolDailyCap']));
+                $st['toolPerIp'] = max(1, min(100, (int)$_POST['toolPerIp']));
+                blog_save_settings($st); audit('seo-settings');
+                $flash[] = ['ok', 'Đã lưu cài đặt viết bài & SEO. Số bài mỗi ngày áp dụng từ ngày mai.'];
+                break;
+            case 'seo_key':
+                $k = trim((string)($_POST['key'] ?? '')); $exp = trim((string)($_POST['expires'] ?? ''));
+                if (!preg_match('/^sk-ant-[A-Za-z0-9_\-]{20,}$/', $k)) { $flash[] = ['err', 'Khóa API phải có dạng sk-ant-…']; break; }
+                if ($exp !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp)) { $flash[] = ['err', 'Ngày hết hạn dạng YYYY-MM-DD.']; break; }
+                ai_save_secret($k, $exp); audit('seo-key', substr($k, 0, 12) . '…');
+                $flash[] = ['ok', 'Đã lưu khóa Claude API mới (chỉ lưu trên máy chủ, ngoài thư mục web).'];
+                break;
+            case 'seo_gsc':
+                $j = json_decode((string)($_POST['gscJson'] ?? ''), true);
+                if (($_POST['gscJson'] ?? '') === '') { @unlink(MO_DATA . '/secrets/gsc.json'); $flash[] = ['ok', 'Đã gỡ kết nối Google Search Console.']; break; }
+                if (!is_array($j) || ($j['type'] ?? '') !== 'service_account' || empty($j['client_email']) || empty($j['private_key'])) { $flash[] = ['err', 'Hãy dán nguyên nội dung tệp JSON khóa của service account (type = service_account).']; break; }
+                if (!is_dir(MO_DATA . '/secrets')) mkdir(MO_DATA . '/secrets', 0750, true);
+                json_write(MO_DATA . '/secrets/gsc.json', $j); @chmod(MO_DATA . '/secrets/gsc.json', 0640); audit('seo-gsc', $j['client_email']);
+                $flash[] = ['ok', 'Đã lưu. Nhớ thêm ' . h($j['client_email']) . ' làm người dùng (Owner) của thuộc tính https://microads.vn/office/ trong Google Search Console.'];
+                break;
+            case 'seo_run':
+                $what = (string)($_POST['what'] ?? '');
+                $req = $what === 'audit' ? ['action' => 'audit'] : ['lang' => $what === 'en' ? 'en' : 'vi'];
+                if (!is_dir(MO_DATA . '/seo')) mkdir(MO_DATA . '/seo', 0750, true);
+                json_write(MO_DATA . '/seo/run-now.json', $req + ['at' => date('c')]); audit('seo-run', $what);
+                $flash[] = ['ok', 'Đã xếp lịch: hệ thống chạy trong vòng 10 phút (viết một bài mất khoảng 3–8 phút).'];
+                break;
+            case 'seo_post':
+                $pl = ($_POST['lang'] ?? '') === 'en' ? 'en' : 'vi'; $ps = (string)($_POST['slug'] ?? '');
+                $post = blog_get($pl, $ps);
+                if (!$post) { $flash[] = ['err', 'Không tìm thấy bài viết.']; break; }
+                $op = (string)($_POST['op'] ?? '');
+                if ($op === 'delete') { @unlink(blog_post_path($pl, $ps)); blog_index_rebuild(); audit('seo-post-delete', "$pl/$ps"); $flash[] = ['ok', 'Đã xóa bài viết (địa chỉ trả về 404).']; break; }
+                $post['status'] = $op === 'unpublish' ? 'unpublished' : 'published';
+                blog_save($post); audit('seo-post-' . $op, "$pl/$ps");
+                $flash[] = ['ok', $op === 'unpublish' ? 'Đã gỡ bài khỏi website.' : 'Đã đăng lại bài.'];
+                break;
             case 'password':
                 $old = (string)($_POST['old'] ?? ''); $new = (string)($_POST['new'] ?? '');
                 if (!password_verify($old, $admin['hash'])) { $flash[] = ['err', 'Mật khẩu hiện tại không đúng.']; break; }
@@ -182,11 +228,12 @@ $latest = release_by_version($c, $c['latest']);
   </form>
 <?php else: ?>
   <nav class="tabs">
-    <?php foreach (['overview' => 'Tổng quan', 'publish' => 'Phát hành bản mới', 'promo' => 'Nội dung quảng bá', 'releases' => 'Lịch sử phiên bản', 'reports' => 'Báo cáo AI', 'account' => 'Tài khoản'] as $k => $v): ?>
+    <?php foreach (['overview' => 'Tổng quan', 'publish' => 'Phát hành bản mới', 'promo' => 'Nội dung quảng bá', 'releases' => 'Lịch sử phiên bản', 'seo' => 'Bài viết & SEO', 'reports' => 'Báo cáo AI', 'account' => 'Tài khoản'] as $k => $v): ?>
       <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $v ?></a>
     <?php endforeach; ?>
   </nav>
 
+  <?php $kd = ai_key_days_left(); if ($kd !== null && $kd <= 7): ?><div class="flash err">Khóa Claude API <?= $kd < 0 ? 'đã hết hạn' : "hết hạn sau $kd ngày" ?> — tạo khóa mới tại platform.claude.com › API keys rồi dán vào thẻ <a href="?tab=seo#key">Bài viết &amp; SEO</a>, nếu không hệ thống ngừng viết bài.</div><?php endif; ?>
   <?php if ($tab === 'overview'): $stats = stats_last_days(14); $today = end($stats); ?>
   <section class="grid3">
     <div class="card stat"><small>Phiên bản mới nhất</small><b><?= h($c['latest'] ?? '—') ?></b><span><?= $latest ? h($latest['date']) . ' · ' . fmt_size((int)$latest['size']) : 'Chưa phát hành' ?></span></div>
@@ -354,6 +401,97 @@ $latest = release_by_version($c, $c['latest']);
     <?php if (!$reports): ?><tr><td colspan="4" class="muted">Chưa có báo cáo nào.</td></tr><?php endif; ?>
     </tbody></table>
   </section>
+
+  <?php elseif ($tab === 'seo'):
+    $st = blog_settings();
+    $all = blog_index_rebuild();
+    $sched = json_read(MO_DATA . '/blog/schedule.json', []);
+    $repFiles = array_reverse(glob(MO_DATA . '/seo/reports/*.json') ?: []);
+    $rep = $repFiles ? json_read($repFiles[0], []) : [];
+    $logF = MO_DATA . '/seo/logs/' . date('Y-m') . '.log'; $logLines = is_file($logF) ? array_slice(file($logF, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [], -40) : [];
+    $sec = ai_secret();
+    $topics = json_read(MO_DATA . '/blog/topics.json', []);
+  ?>
+  <section class="grid3">
+    <div class="card stat"><small>Bài đã đăng</small><b><?= count(array_filter($all, fn($p) => ($p['status'] ?? '') === 'published')) ?></b><span>VI <?= count(array_filter($all, fn($p) => $p['lang'] === 'vi')) ?> · EN <?= count(array_filter($all, fn($p) => $p['lang'] === 'en')) ?></span></div>
+    <div class="card stat"><small>Chi phí Claude tháng này</small><b>$<?= number_format(ai_spend(date('Y-m')), 2) ?></b><span>Hôm nay $<?= number_format(ai_spend(date('Y-m-d')), 2) ?> / $<?= number_format((float)$st['dailyBudgetUsd'], 2) ?> · trung bình $<?= number_format(ai_article_cost(), 2) ?>/bài</span></div>
+    <div class="card stat"><small>Kế hoạch hôm nay</small><b><?= count($sched['slots'] ?? []) ?> bài</b><span><?php foreach ($sched['slots'] ?? [] as $sl): ?><?= h(strtoupper($sl['lang']) . ' ' . substr($sl['at'], 11, 5)) ?><?= $sl['done'] ? ' ✓' : '' ?> · <?php endforeach; ?></span></div>
+  </section>
+
+  <?php if ($rep): $an = $rep['analysis'] ?? []; ?>
+  <section class="card">
+    <h2>Báo cáo SEO ngày <?= h($rep['date']) ?> <span class="pill <?= ($an['health'] ?? '') === 'good' ? 'ok' : '' ?>"><?= h(['good' => 'Tốt', 'warning' => 'Cần chú ý', 'bad' => 'Có vấn đề'][$an['health'] ?? ''] ?? '—') ?></span></h2>
+    <p><?= nl2br(h($an['summaryVi'] ?? '')) ?></p>
+    <?php if (!empty($an['issues'])): ?><table class="tbl"><thead><tr><th>Mức</th><th>Trang</th><th>Vấn đề</th><th>Cách xử lý</th></tr></thead><tbody>
+      <?php foreach ($an['issues'] as $is): ?><tr><td><?= h(['high' => 'Cao', 'medium' => 'Vừa', 'low' => 'Thấp'][$is['severity']] ?? '') ?></td><td><?= h(str_replace('https://microads.vn', '', $is['url'])) ?></td><td><?= h($is['problemVi']) ?></td><td><?= h($is['fixVi']) ?></td></tr><?php endforeach; ?>
+    </tbody></table><?php endif; ?>
+    <?php if (!empty($rep['actions'])): ?><p class="muted">Đã tự xử lý: <?php foreach ($rep['actions'] as $ac): ?><?= h($ac['type'] . ' ' . $ac['lang'] . '/' . $ac['slug'] . ($ac['ok'] ? ' ✓' : ' ✗')) ?>; <?php endforeach; ?></p><?php endif; ?>
+    <?php if (!empty($rep['performance'])): ?><table class="tbl"><thead><tr><th>Tốc độ (điện thoại)</th><th>Hiệu năng</th><th>SEO</th><th>LCP</th><th>CLS</th></tr></thead><tbody>
+      <?php foreach ($rep['performance'] as $pf): ?><tr><td><?= h(str_replace('https://microads.vn', '', $pf['url'])) ?></td><?php if (isset($pf['error'])): ?><td colspan="4" class="muted"><?= h($pf['error']) ?></td><?php else: ?><td><?= (int)$pf['performance'] ?></td><td><?= (int)$pf['seo'] ?></td><td><?= number_format(($pf['lcpMs'] ?? 0) / 1000, 1) ?> s</td><td><?= number_format((float)($pf['cls'] ?? 0), 3) ?></td><?php endif; ?></tr><?php endforeach; ?>
+    </tbody></table><?php endif; ?>
+    <p class="muted">Hôm qua: <?= (int)($rep['traffic']['views'] ?? 0) ?> lượt xem · <?= array_sum($rep['traffic']['downloadsSinceLastAudit'] ?? []) ?> lượt tải ·
+      hoạt động <?= isset($rep['uptime']['checks']) ? (int)$rep['uptime']['checks'] - (int)$rep['uptime']['fails'] . '/' . (int)$rep['uptime']['checks'] . ' lần kiểm tra đạt' : '—' ?> ·
+      SSL còn <?= h((string)($rep['security']['certDaysLeft'] ?? '—')) ?> ngày</p>
+    <p class="muted">Google Search Console: <?= $rep['gsc'] === null ? 'chưa kết nối (xem hướng dẫn bên dưới)' : (isset($rep['gsc']['error']) ? 'lỗi — ' . h($rep['gsc']['error']) : count($rep['gsc']['inspections'] ?? []) . ' trang đã kiểm tra index') ?> ·
+      Sitemap: <?= (int)($rep['site']['sitemapUrls'] ?? 0) ?> địa chỉ · Link hỏng: <?= count($rep['site']['brokenLinks'] ?? []) ?></p>
+    <?php if (!empty($rep['gsc']['inspections'])): ?><details><summary>Trạng thái index từng trang</summary><table class="tbl"><thead><tr><th>Trang</th><th>Kết luận</th><th>Trạng thái Google</th><th>Lần thu thập</th></tr></thead><tbody>
+      <?php foreach ($rep['gsc']['inspections'] as $u => $in): ?><tr><td><?= h(str_replace('https://microads.vn', '', $u)) ?></td><td><?= h($in['verdict']) ?></td><td><?= h($in['coverage']) ?></td><td><?= h(substr($in['lastCrawl'], 0, 10)) ?></td></tr><?php endforeach; ?>
+    </tbody></table></details><?php endif; ?>
+  </section>
+  <?php endif; ?>
+
+  <section class="card">
+    <h2>Bài viết (<?= count($all) ?>)</h2>
+    <form method="post" class="actions"><input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="seo_run">
+      <button class="btn" name="what" value="vi">Viết 1 bài tiếng Việt ngay</button> <button class="btn" name="what" value="en">Viết 1 bài tiếng Anh ngay</button> <button class="btn" name="what" value="audit">Chạy rà soát SEO ngay</button></form>
+    <table class="tbl"><thead><tr><th>Ngày</th><th>Bài</th><th>Điểm</th><th>Chi phí</th><th></th></tr></thead><tbody>
+    <?php foreach ($all as $bp): ?><tr>
+      <td><?= h(substr($bp['publishedAt'], 0, 10)) ?><br><span class="pill"><?= h(strtoupper($bp['lang'])) ?></span></td>
+      <td><a href="<?= h(blog_base($bp['lang']) . $bp['slug']) ?>" target="_blank"><?= h($bp['title']) ?></a><br><span class="muted"><?= h(($bp['pillar'] ?? '') . ' · ' . ($bp['format'] ?? '') . ' · ' . ($bp['wordCount'] ?? 0) . ' từ') ?><?= ($bp['status'] ?? '') !== 'published' ? ' · ĐÃ GỠ' : '' ?></span></td>
+      <td><?= (int)($bp['review']['score'] ?? 0) ?></td><td>$<?= number_format((float)($bp['costUsd'] ?? 0), 2) ?></td>
+      <td><form method="post" class="actions"><input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="seo_post"><input type="hidden" name="lang" value="<?= h($bp['lang']) ?>"><input type="hidden" name="slug" value="<?= h($bp['slug']) ?>">
+        <?php if (($bp['status'] ?? '') === 'published'): ?><button class="btn sm" name="op" value="unpublish">Gỡ</button><?php else: ?><button class="btn sm" name="op" value="publish">Đăng lại</button><?php endif; ?>
+        <button class="btn sm danger" name="op" value="delete" onclick="return confirm('Xóa hẳn bài này?')">Xóa</button></form></td>
+    </tr><?php endforeach; ?>
+    <?php if (!$all): ?><tr><td colspan="5" class="muted">Chưa có bài nào.</td></tr><?php endif; ?>
+    </tbody></table>
+    <p class="muted">Chủ đề đang chờ: VI <?= count($topics['vi'] ?? []) ?> · EN <?= count($topics['en'] ?? []) ?> (tự nghiên cứu thêm khi còn dưới 4).</p>
+  </section>
+
+  <form method="post" class="card">
+    <h2>Cài đặt viết bài</h2>
+    <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="seo_settings">
+    <label class="chk"><input type="checkbox" name="enabled" <?= $st['enabled'] ? 'checked' : '' ?>> Tự động viết và đăng bài mỗi ngày</label>
+    <div class="row2"><label>Ít nhất (bài/ngày)<input type="number" name="minPerDay" min="0" max="10" value="<?= (int)$st['minPerDay'] ?>"></label><label>Nhiều nhất (bài/ngày)<input type="number" name="maxPerDay" min="0" max="10" value="<?= (int)$st['maxPerDay'] ?>"></label></div>
+    <div class="row2"><label>Ngân sách Claude mỗi ngày (USD, gồm mọi việc)<input type="number" name="dailyBudgetUsd" min="0" step="0.1" value="<?= h((string)$st['dailyBudgetUsd']) ?>"></label><label>Trong đó cho công cụ tạo công thức (USD/ngày)<input type="number" name="toolDailyBudgetUsd" min="0" step="0.05" value="<?= h((string)$st['toolDailyBudgetUsd']) ?>"></label></div>
+    <label>Công cụ tạo công thức: tối đa lượt/ngày (toàn trang)<input type="number" name="toolDailyCap" min="0" value="<?= (int)$st['toolDailyCap'] ?>"></label>
+    <label>Công cụ tạo công thức: lượt/ngày cho mỗi người<input type="number" name="toolPerIp" min="1" max="100" value="<?= (int)$st['toolPerIp'] ?>"></label>
+    <button class="btn primary">Lưu</button>
+  </form>
+
+  <form method="post" class="card" id="key">
+    <h2>Khóa Claude API</h2>
+    <p class="muted">Đang dùng: <code><?= h($sec['key'] !== '' ? substr($sec['key'], 0, 14) . '…' . substr($sec['key'], -4) : 'chưa có') ?></code> · hết hạn <?= h($sec['expires'] ?: '—') ?> (mô hình claude-opus-5-5). Khóa chỉ lưu trên máy chủ, ngoài thư mục web, không nằm trong mã nguồn.</p>
+    <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="seo_key">
+    <div class="row2"><label>Khóa mới<input name="key" autocomplete="off" placeholder="sk-ant-…"></label><label>Ngày hết hạn (YYYY-MM-DD)<input name="expires" placeholder="2027-01-31"></label></div>
+    <button class="btn primary">Lưu khóa mới</button>
+  </form>
+
+  <form method="post" class="card">
+    <h2>Kết nối Google Search Console (để biết trang nào chưa được index và vì sao)</h2>
+    <ol class="muted">
+      <li>Vào console.cloud.google.com → tạo dự án → bật <b>Google Search Console API</b>.</li>
+      <li>IAM &amp; Admin → Service accounts → tạo tài khoản → Keys → Add key → JSON → tải tệp về.</li>
+      <li>Search Console → thuộc tính <b>https://microads.vn/office/</b> → Cài đặt → Người dùng và quyền → Thêm người dùng: email của service account, quyền <b>Chủ sở hữu</b>.</li>
+      <li>Dán nội dung tệp JSON vào ô dưới và lưu.</li>
+    </ol>
+    <p class="muted">Trạng thái: <?= is_file(MO_DATA . '/secrets/gsc.json') ? 'đã kết nối (' . h(json_read(MO_DATA . '/secrets/gsc.json', [])['client_email'] ?? '') . ')' : 'chưa kết nối' ?></p>
+    <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="action" value="seo_gsc">
+    <label>Tệp JSON của service account (để trống rồi lưu = gỡ kết nối)<textarea name="gscJson" rows="4" autocomplete="off"></textarea></label>
+    <button class="btn primary">Lưu</button>
+  </form>
+
+  <section class="card"><h2>Nhật ký</h2><pre class="log"><?= h(implode("\n", $logLines)) ?></pre></section>
 
   <?php elseif ($tab === 'account'): ?>
   <form method="post" class="card narrow">
